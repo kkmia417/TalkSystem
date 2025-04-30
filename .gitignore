@@ -10,6 +10,13 @@
 Assets/AssetStoreTools*
 
 # ============================
+# TextMeshPro (TMP) / Settings
+# ============================
+Assets/TextMesh Pro/
+Assets/Settings/
+
+
+# ============================
 # Rider / JetBrains IDEs
 # ============================
 .idea/
@@ -48,6 +55,7 @@ Thumbs.db
 *.pdb
 *.apk
 *.aab
+
 
 # ============================
 # Local test artifacts
