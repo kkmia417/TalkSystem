@@ -1,0 +1,7 @@
+Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey
+1,kkmia,demo,2,,,
+2,kkmia,demo,-1,,,
+3,kkmia,Demo,-1,,,
+4,kkmia,GameOver,-1,,GameOVer,
+10,kkmia,DemoEnd,20,,End,
+20,kkmia,Demo,-1,,,
