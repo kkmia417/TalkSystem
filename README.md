@@ -1,6 +1,6 @@
 Talk System
 
-`kkmia.TalkSystem` は、CSVで管理された会話データを使って、シンプルかつ柔軟に会話演出を実現できる Unity 向けライブラリです。
+`kkmia.TalkSystem` は、CSVで管理された会話データを使って、シンプルかつ柔軟に会話演出を実現できる初心者向けライブラリです。【Unity】
 
 - 会話データは CSV で定義
 - トリガー（TriggerKey）や条件分岐（ConditionKey）に対応
