@@ -11,5 +11,6 @@ namespace kkmia.TalkSystem
         public DialogueSessionState State = DialogueSessionState.Idle;
         public List<int> SeenLineIds = new List<int>();
         public List<int> ChoiceHistory = new List<int>();
+        public List<DialogueHistoryEntry> History = new List<DialogueHistoryEntry>();
     }
 }

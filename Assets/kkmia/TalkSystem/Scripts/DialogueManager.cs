@@ -43,6 +43,16 @@ namespace kkmia.TalkSystem
             get { return _presenter != null ? _presenter.State : DialogueSessionState.Idle; }
         }
 
+        public System.Collections.Generic.IReadOnlyList<DialogueHistoryEntry> History
+        {
+            get
+            {
+                return _presenter != null
+                    ? _presenter.Session.History
+                    : new System.Collections.Generic.List<DialogueHistoryEntry>();
+            }
+        }
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -131,6 +141,26 @@ namespace kkmia.TalkSystem
             view.Clear();
             view.gameObject.SetActive(false);
             Debug.Log("[DialogueManager] View がセットされました。");
+        }
+
+        public void LoadRepository(IDialogueRepositoryLoader loader)
+        {
+            if (loader == null)
+            {
+                Debug.LogError("DialogueManager: loader is null.");
+                return;
+            }
+
+            StartCoroutine(loader.Load(repository =>
+            {
+                _repository = repository;
+                if (view != null)
+                    SetView(view);
+            }, error =>
+            {
+                Debug.LogError("DialogueManager: " + error);
+                RaiseError(error);
+            }));
         }
 
         public void StartDialogue(int id)

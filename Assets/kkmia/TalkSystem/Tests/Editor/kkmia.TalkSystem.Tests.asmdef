@@ -3,6 +3,7 @@
     "rootNamespace": "kkmia.TalkSystem.Tests",
     "references": [
         "kkmia.TalkSystem.Runtime",
+        "kkmia.TalkSystem.Editor",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

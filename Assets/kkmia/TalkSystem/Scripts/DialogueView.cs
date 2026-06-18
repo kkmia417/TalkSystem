@@ -123,6 +123,11 @@ namespace kkmia.TalkSystem
                 typewriter.Complete();
         }
 
+        public void RequestNext()
+        {
+            HandleNextButtonClicked();
+        }
+
         private void CompleteLine(DialogueData data, Action onComplete)
         {
             DrawChoices();

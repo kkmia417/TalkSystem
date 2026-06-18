@@ -1,50 +1,104 @@
-Talk System
+# Talk System
 
-`kkmia.TalkSystem` は、CSVで管理された会話データを使って、シンプルかつ柔軟に会話演出を実現できる初心者向けライブラリです。【Unity】
+[![Unity Tests](https://github.com/kkmia417/TalkSystem/actions/workflows/unity-tests.yml/badge.svg)](https://github.com/kkmia417/TalkSystem/actions/workflows/unity-tests.yml)
+[![Package Validation](https://github.com/kkmia417/TalkSystem/actions/workflows/package-validation.yml/badge.svg)](https://github.com/kkmia417/TalkSystem/actions/workflows/package-validation.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Unity](https://img.shields.io/badge/Unity-6000.0%2B-black.svg)](https://unity.com/)
 
-- 会話データは CSV で定義
-- トリガー（TriggerKey）や条件分岐（ConditionKey）に対応
-- タイプライター風の演出付きでテキストを表示
-- Undo / Redo 対応の CSV エディタ付き
-- Manager / Presenter / View に分離された拡張しやすい設計
+CSV-driven dialogue tooling for Unity games. Talk System gives you branching dialogue, validation, preview playback, runtime extension points, and a visual graph editor while keeping dialogue data easy to edit in CSV or external tools.
 
+## Why Use It
 
-`kkmia.TalkSystem` is a CSV-driven dialogue system library for Unity.  
-It provides a simple and extensible structure for branching conversations, and condition-based dialogue flow.
+- Author dialogue in CSV, Google Sheets exports, JSON, or writer-friendly text imports.
+- Validate duplicate IDs, broken links, unreachable rows, cycles, and malformed data before Play Mode.
+- Preview and edit dialogue from Unity editor tools.
+- Build production flows with choices, conditions, variables, events, save data, backlog/history, and custom views.
+- Install through Unity Package Manager and import samples directly into a project.
 
-- CSV-based dialogue data with support for branching
-- TriggerKey and ConditionKey filtering system
-- Built-in typewriter effect (1 character at a time)
-- Editable dialogue CSV via a custom Unity Editor tool
-- Clear separation of logic (Manager, Presenter, View)
+## Installation
 
-## Runtime extension points
+Open **Window > Package Manager > Add package from git URL**:
 
-TalkSystem keeps the existing CSV workflow, while adding extension points for larger projects.
+```text
+https://github.com/kkmia417/TalkSystem.git
+```
 
-- `IDialogueConditionEvaluator`: evaluates `ConditionKey`
-- `IDialogueVariableResolver`: resolves text placeholders such as `{playerName}`
-- `IDialogueTextResolver`: swaps inline text, localization keys, or external localization backends
-- `IDialogueEventDispatcher`: reacts to `EventKey`
-- `DialogueSaveData`: captures/restores current line, seen lines, choices, and trigger state
+Minimum Unity version: `6000.0`.
 
-Optional CSV columns are supported after the original schema:
+## Quick Start
+
+1. Install the package from the Git URL.
+2. Import the **Feature Tour** sample from Package Manager.
+3. Run `Tools/kkmia/Samples/Create Feature Tour Scene`, open the generated scene, and press Play.
+4. Open `Tools/kkmia/Dialogue Graph Editor` to inspect the sample dialogue as nodes.
+5. Run `Tools/kkmia/Dialogue Validator` before shipping dialogue changes.
+
+Start dialogue from code:
+
+```csharp
+using kkmia.TalkSystem;
+
+DialogueManager.Instance.StartDialogue(1);
+DialogueManager.Instance.StartDialogueForState("QuestStart");
+```
+
+## CSV Format
+
+Required columns:
+
+```csv
+Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey
+```
+
+Optional production columns:
+
+```csv
+EventKey,Choices,AutoNextSeconds
+```
+
+Example:
 
 ```csv
 Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey,EventKey,Choices,AutoNextSeconds
-1,Guide,"Hello, {playerName}",-1,,,has_met_guide,greet,"Yes->2|No->3",
+1,Guide,"Hello, {playerName}. Choose a path.",-1,happy,QuestStart,,quest_started,"Left->2?can_go_left|Right->3",
 ```
 
-`Choices` uses `Label->NextId` entries separated by `|`. A choice can add a condition with `?conditionKey`, for example `Buy->10?has_money|Leave->20`.
+Choices use `Label->NextId` entries separated by `|`. Add `?conditionKey` to hide a choice unless your `IDialogueConditionEvaluator` returns true.
 
-## Editor tools
+## Runtime Extension Points
 
-Open these from Unity:
+- `IDialogueConditionEvaluator`: evaluates `ConditionKey`
+- `IDialogueVariableResolver`: resolves placeholders such as `{playerName}`
+- `IDialogueTextResolver`: supports localization keys or external text databases
+- `IDialogueEventDispatcher`: reacts to `EventKey`
+- `IDialogueView`: swaps UGUI for custom UI Toolkit, Timeline, or in-game terminal views
+- `DialogueSaveData`: integrates current dialogue state with your save system
 
+## Editor Tools
+
+Open from the Unity menu:
+
+- `Tools/kkmia/Dialogue Graph Editor`
 - `Tools/kkmia/Dialogue CSV Editor`
 - `Tools/kkmia/Dialogue Validator`
 - `Tools/kkmia/Dialogue Preview`
+- `Tools/kkmia/Dialogue Import Export`
 
-The CSV editor now round-trips quoted fields, commas, escaped quotes, and multiline text through the shared runtime CSV codec.
+## Documentation
 
-This software is released under the MIT License, see LICENSE.txt.
+- [Installation](Documentation~/installation.md)
+- [Quick Start](Documentation~/quick-start.md)
+- [CSV Schema](Documentation~/csv-schema.md)
+- [Runtime API](Documentation~/runtime-api.md)
+- [Editor Tools](Documentation~/editor-tools.md)
+- [Import and Export](Documentation~/import-export.md)
+- [Migration Guide](Documentation~/migration-guide.md)
+- [Troubleshooting](Documentation~/troubleshooting.md)
+
+## Roadmap
+
+The current focus is package polish, graph editing, samples, import/export workflows, and CI-backed releases. See open GitHub issues for implementation tasks.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

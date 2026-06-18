@@ -27,5 +27,10 @@ namespace kkmia.TalkSystem
             if (messages == null) return;
             _messages.AddRange(messages);
         }
+
+        public void Clear()
+        {
+            _messages.Clear();
+        }
     }
 }

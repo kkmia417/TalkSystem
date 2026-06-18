@@ -8,6 +8,7 @@ namespace kkmia.TalkSystem
         private readonly IDialogueRepository _repository;
         private readonly List<int> _seenLineIds = new List<int>();
         private readonly List<int> _choiceHistory = new List<int>();
+        private readonly List<DialogueHistoryEntry> _history = new List<DialogueHistoryEntry>();
         private readonly HashSet<int> _skipGuard = new HashSet<int>();
 
         public DialogueSession(IDialogueRepository repository)
@@ -22,6 +23,7 @@ namespace kkmia.TalkSystem
         public IReadOnlyList<DialogueChoice> CurrentChoices { get; private set; } = new List<DialogueChoice>();
         public IReadOnlyList<int> SeenLineIds { get { return _seenLineIds; } }
         public IReadOnlyList<int> ChoiceHistory { get { return _choiceHistory; } }
+        public IReadOnlyList<DialogueHistoryEntry> History { get { return _history; } }
         public string TriggerKey { get; private set; }
         public IDialogueConditionEvaluator ConditionEvaluator { get; set; }
 
@@ -46,6 +48,12 @@ namespace kkmia.TalkSystem
             }
 
             State = CurrentChoices.Count > 0 ? DialogueSessionState.ChoicePending : DialogueSessionState.WaitingForInput;
+        }
+
+        public void RecordDisplayedLine(DialogueData displayData)
+        {
+            if (displayData == null) return;
+            _history.Add(new DialogueHistoryEntry(displayData, _history.Count));
         }
 
         public bool Advance()
@@ -87,7 +95,8 @@ namespace kkmia.TalkSystem
                 TriggerKey = TriggerKey,
                 State = State,
                 SeenLineIds = new List<int>(_seenLineIds),
-                ChoiceHistory = new List<int>(_choiceHistory)
+                ChoiceHistory = new List<int>(_choiceHistory),
+                History = new List<DialogueHistoryEntry>(_history)
             };
         }
 
@@ -103,6 +112,10 @@ namespace kkmia.TalkSystem
             _choiceHistory.Clear();
             if (saveData.ChoiceHistory != null)
                 _choiceHistory.AddRange(saveData.ChoiceHistory);
+
+            _history.Clear();
+            if (saveData.History != null)
+                _history.AddRange(saveData.History);
 
             TriggerKey = saveData.TriggerKey ?? string.Empty;
             State = saveData.State;

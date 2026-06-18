@@ -158,6 +158,7 @@ namespace kkmia.TalkSystem
             var resolvedText = _textResolver.Resolve(data, _languageKey, _variableResolver);
             var displayData = data.WithResolvedText(resolvedText);
             _session.MarkTyping();
+            _session.RecordDisplayedLine(displayData);
             RaiseLineStarted(data);
 
             if (data.HasEventKey && _eventDispatcher != null)
