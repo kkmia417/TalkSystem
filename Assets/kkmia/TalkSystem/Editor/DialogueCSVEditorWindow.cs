@@ -1,7 +1,6 @@
 using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System;
 
@@ -48,6 +47,17 @@ namespace kkmia.TalkSystem.Editor
                 {
                     LoadCSV();
                 }
+
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("Open Validator"))
+                {
+                    DialogueValidationWindow.Open(_csvFile);
+                }
+                if (GUILayout.Button("Open Preview"))
+                {
+                    DialoguePreviewWindow.Open(_csvFile);
+                }
+                EditorGUILayout.EndHorizontal();
 
                 if (_csvData.Count > 0)
                 {
@@ -224,21 +234,33 @@ namespace kkmia.TalkSystem.Editor
         private void LoadCSV()
         {
             _csvData.Clear();
+            _undoStack.Clear();
+            _redoStack.Clear();
+            _selectedRow = -1;
 
-            var lines = _csvFile.text.Split(new[] { '\r', '\n' }, System.StringSplitOptions.RemoveEmptyEntries);
-            if (lines.Length == 0) return;
+            var document = DialogueCsvCodec.Parse(_csvFile.text);
+            if (document.Headers.Count == 0) return;
 
-            _headers = lines[0].Split(',');
+            _headers = document.Headers.ToArray();
 
-            for (int i = 1; i < lines.Length; i++)
+            foreach (var row in document.Rows)
             {
-                var cols = lines[i].Split(',');
-                if (cols.Length != _headers.Length)
+                if (row.Values.Count != _headers.Length)
                 {
-                    Debug.LogWarning($"[CSV Editor] 行 {i + 1} の列数が一致しません。スキップします。");
+                    Debug.LogWarning($"[CSV Editor] 行 {row.RowNumber} の列数が一致しません。足りない列は空として扱います。");
+                    var resized = row.Values.Concat(Enumerable.Repeat("", _headers.Length)).Take(_headers.Length).ToArray();
+                    _csvData.Add(resized);
                     continue;
                 }
-                _csvData.Add(cols);
+                _csvData.Add(row.Values.ToArray());
+            }
+
+            foreach (var message in document.Diagnostics.Messages)
+            {
+                if (message.Severity == DialogueValidationSeverity.Error)
+                    Debug.LogError("[CSV Editor] " + message);
+                else
+                    Debug.LogWarning("[CSV Editor] " + message);
             }
         }
 
@@ -262,18 +284,8 @@ namespace kkmia.TalkSystem.Editor
             if (_csvFile == null) return;
 
             var path = AssetDatabase.GetAssetPath(_csvFile);
-            using (var writer = new StreamWriter(path, false))
-            {
-                writer.WriteLine(string.Join(",", _headers));
-                foreach (var row in _csvData)
-                {
-                    var paddedRow = row.Length == _headers.Length
-                        ? row
-                        : row.Concat(Enumerable.Repeat("", _headers.Length - row.Length)).ToArray();
-
-                    writer.WriteLine(string.Join(",", paddedRow));
-                }
-            }
+            var rows = _csvData.Select(row => (IReadOnlyList<string>)row.Concat(Enumerable.Repeat("", _headers.Length)).Take(_headers.Length).ToArray());
+            System.IO.File.WriteAllText(path, DialogueCsvCodec.Write(_headers, rows), System.Text.Encoding.UTF8);
 
             AssetDatabase.Refresh();
             Debug.Log($"[DialogueCSVEditor] CSVファイルを保存しました: {path}");

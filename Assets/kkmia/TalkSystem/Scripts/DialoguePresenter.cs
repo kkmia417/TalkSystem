@@ -1,75 +1,239 @@
+using System;
 using UnityEngine;
 
 namespace kkmia.TalkSystem
 {
-    /// <summary>
-    /// 会話進行のロジックを司るプレゼンター（MVPのP）
-    /// </summary>
-    public class DialoguePresenter
+    public class DialoguePresenter : IDisposable
     {
-        private readonly IDialogueRepository _repository;
-        private readonly DialogueView _view;
+        private readonly DialogueSession _session;
+        private IDialogueView _view;
+        private IDialogueTextResolver _textResolver;
+        private IDialogueVariableResolver _variableResolver;
+        private IDialogueEventDispatcher _eventDispatcher;
+        private string _languageKey = string.Empty;
+        private bool _disposed;
 
-        private DialogueData _currentData;
-        private bool _isBusy = false;
-
-        public DialoguePresenter(IDialogueRepository repository, DialogueView view)
+        public DialoguePresenter(IDialogueRepository repository, IDialogueView view)
         {
-            _repository = repository;
+            _session = new DialogueSession(repository);
+            _textResolver = new DefaultDialogueTextResolver();
+            _variableResolver = new EmptyDialogueVariableResolver();
+            BindView(view);
+        }
+
+        public event Action<DialogueEventContext> LineStarted;
+        public event Action<DialogueEventContext> LineCompleted;
+        public event Action<DialogueEventContext> DialogueEnded;
+        public event Action<string> ErrorRaised;
+
+        public DialogueSessionState State
+        {
+            get { return _session.State; }
+        }
+
+        public DialogueData CurrentData
+        {
+            get { return _session.CurrentData; }
+        }
+
+        public DialogueSession Session
+        {
+            get { return _session; }
+        }
+
+        public void SetConditionEvaluator(IDialogueConditionEvaluator evaluator)
+        {
+            _session.ConditionEvaluator = evaluator ?? new AllowAllDialogueConditionEvaluator();
+        }
+
+        public void SetVariableResolver(IDialogueVariableResolver resolver)
+        {
+            _variableResolver = resolver ?? new EmptyDialogueVariableResolver();
+        }
+
+        public void SetTextResolver(IDialogueTextResolver resolver)
+        {
+            _textResolver = resolver ?? new DefaultDialogueTextResolver();
+        }
+
+        public void SetEventDispatcher(IDialogueEventDispatcher dispatcher)
+        {
+            _eventDispatcher = dispatcher;
+        }
+
+        public void SetLanguage(string languageKey)
+        {
+            _languageKey = languageKey ?? string.Empty;
+        }
+
+        public void BindView(IDialogueView view)
+        {
+            if (_view == view) return;
+
+            UnbindView();
             _view = view;
 
-            _view.OnNextRequested += HandleNextRequested;
+            if (_view != null)
+            {
+                _view.NextRequested += HandleNextRequested;
+                _view.ChoiceSelected += HandleChoiceSelected;
+            }
         }
 
-        /// <summary>
-        /// 指定されたIDの会話を開始する
-        /// </summary>
         public void Start(int id)
         {
-            if (_isBusy) return;
-            _isBusy = true;
-
-            _currentData = _repository.Get(id);
-            if (_currentData == null)
-            {
-                Debug.LogWarning($"[DialoguePresenter] ID {id} の会話データが見つかりません。");
-                _view.Clear();
-                _isBusy = false;
-                return;
-            }
-            
-            _view.Show(_currentData, () => _isBusy = false);
+            Start(id, null);
         }
 
-        /// <summary>
-        /// 「次へ」が要求されたときの処理
-        /// </summary>
-        private void HandleNextRequested()
+        public void Start(int id, string triggerKey)
         {
-            if (_isBusy) return;
+            if (_disposed) return;
 
-            if (_currentData == null)
+            if (!_session.Start(id, triggerKey))
             {
+                RaiseError("Dialogue data was not found for ID " + id + ".");
+                if (_view != null) _view.Clear();
+                RaiseEnded();
                 return;
             }
 
-            if (_currentData.NextId >= 0)
-            {
-                Start(_currentData.NextId);
-            }
-            else
-            {
-                _view.Clear();
-            }
+            RenderCurrent();
         }
 
-        /// <summary>
-        /// 会話状態を初期化する
-        /// </summary>
+        public void End()
+        {
+            if (_view != null)
+            {
+                _view.ForceStop();
+                _view.Clear();
+            }
+
+            _session.End();
+            RaiseEnded();
+        }
+
         public void Reset()
         {
-            _currentData = null;
-            _isBusy = false;
+            _session.End();
+        }
+
+        public DialogueSaveData CaptureState()
+        {
+            return _session.Capture();
+        }
+
+        public bool RestoreState(DialogueSaveData saveData)
+        {
+            if (!_session.Restore(saveData))
+                return false;
+
+            if (_session.CurrentData != null)
+                RenderCurrent();
+
+            return true;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            UnbindView();
+            _disposed = true;
+        }
+
+        private void RenderCurrent()
+        {
+            if (_view == null)
+            {
+                RaiseError("Dialogue view is not bound.");
+                return;
+            }
+
+            var data = _session.CurrentData;
+            if (data == null)
+            {
+                End();
+                return;
+            }
+
+            var resolvedText = _textResolver.Resolve(data, _languageKey, _variableResolver);
+            var displayData = data.WithResolvedText(resolvedText);
+            _session.MarkTyping();
+            RaiseLineStarted(data);
+
+            if (data.HasEventKey && _eventDispatcher != null)
+                _eventDispatcher.Dispatch(new DialogueEventContext(data, data.EventKey, _session.State));
+
+            _view.Show(displayData, _session.CurrentChoices, () =>
+            {
+                _session.MarkLineReady();
+            });
+        }
+
+        private void HandleNextRequested()
+        {
+            if (_view == null) return;
+
+            if (_view.IsTyping || _session.State == DialogueSessionState.Typing)
+            {
+                _view.CompleteTyping();
+                return;
+            }
+
+            if (_session.State == DialogueSessionState.ChoicePending)
+                return;
+
+            var completed = _session.CurrentData;
+            if (completed != null)
+                RaiseLineCompleted(completed);
+
+            if (_session.Advance())
+                RenderCurrent();
+            else
+                RaiseEnded();
+        }
+
+        private void HandleChoiceSelected(int index)
+        {
+            var completed = _session.CurrentData;
+            if (completed != null)
+                RaiseLineCompleted(completed);
+
+            if (_session.SelectChoice(index))
+                RenderCurrent();
+            else
+                End();
+        }
+
+        private void UnbindView()
+        {
+            if (_view == null) return;
+            _view.NextRequested -= HandleNextRequested;
+            _view.ChoiceSelected -= HandleChoiceSelected;
+            _view = null;
+        }
+
+        private void RaiseLineStarted(DialogueData data)
+        {
+            var context = new DialogueEventContext(data, data != null ? data.EventKey : string.Empty, _session.State);
+            if (LineStarted != null) LineStarted(context);
+        }
+
+        private void RaiseLineCompleted(DialogueData data)
+        {
+            var context = new DialogueEventContext(data, data != null ? data.EventKey : string.Empty, _session.State);
+            if (LineCompleted != null) LineCompleted(context);
+        }
+
+        private void RaiseEnded()
+        {
+            var context = new DialogueEventContext(null, string.Empty, _session.State);
+            if (DialogueEnded != null) DialogueEnded(context);
+        }
+
+        private void RaiseError(string message)
+        {
+            Debug.LogWarning("[DialoguePresenter] " + message);
+            if (ErrorRaised != null) ErrorRaised(message);
         }
     }
 }

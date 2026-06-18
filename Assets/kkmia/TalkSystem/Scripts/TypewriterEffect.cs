@@ -67,6 +67,17 @@ namespace kkmia.TalkSystem
             }
         }
 
+        public void Cancel()
+        {
+            if (_typingCoroutine != null)
+            {
+                StopCoroutine(_typingCoroutine);
+                _typingCoroutine = null;
+            }
+
+            _onComplete = null;
+        }
+
         /// <summary>
         /// 表示間隔を変更します。
         /// </summary>
