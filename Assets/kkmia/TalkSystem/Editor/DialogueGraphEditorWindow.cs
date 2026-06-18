@@ -1,4 +1,6 @@
 using System.IO;
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -7,6 +9,10 @@ namespace kkmia.TalkSystem.Editor
 {
     public sealed class DialogueGraphEditorWindow : EditorWindow
     {
+        private const float NodeWidth = 260f;
+        private const float NodeHeight = 170f;
+        private const string LayoutPrefsPrefix = "kkmia.TalkSystem.GraphLayout.";
+
         private TextAsset _csvFile;
         private DialogueGraphModel _model = new DialogueGraphModel();
         private DialogueGraphNode _selected;
@@ -14,6 +20,9 @@ namespace kkmia.TalkSystem.Editor
         private Vector2 _inspectorScroll;
         private string _search = string.Empty;
         private bool _showOnlyProblems;
+        private bool _showOnlyBrokenLinks;
+        private bool _showOnlyTriggerEntries;
+        private string _speakerFilter = string.Empty;
         private float _zoom = 1f;
 
         [MenuItem("Tools/kkmia/Dialogue Graph Editor")]
@@ -49,9 +58,26 @@ namespace kkmia.TalkSystem.Editor
                 AddNode();
 
             _search = GUILayout.TextField(_search, GUI.skin.FindStyle("ToolbarSeachTextField") ?? EditorStyles.toolbarTextField, GUILayout.MinWidth(160));
+            if (GUILayout.Button("Find", EditorStyles.toolbarButton, GUILayout.Width(48)))
+                FocusFirstSearchResult();
+
             _showOnlyProblems = GUILayout.Toggle(_showOnlyProblems, "Problems", EditorStyles.toolbarButton, GUILayout.Width(80));
+            _showOnlyBrokenLinks = GUILayout.Toggle(_showOnlyBrokenLinks, "Broken", EditorStyles.toolbarButton, GUILayout.Width(68));
+            _showOnlyTriggerEntries = GUILayout.Toggle(_showOnlyTriggerEntries, "Triggers", EditorStyles.toolbarButton, GUILayout.Width(72));
+            GUILayout.Label("Speaker", GUILayout.Width(52));
+            _speakerFilter = GUILayout.TextField(_speakerFilter, EditorStyles.toolbarTextField, GUILayout.Width(110));
             GUILayout.Label("Zoom", GUILayout.Width(36));
             _zoom = GUILayout.HorizontalSlider(_zoom, 0.6f, 1.4f, GUILayout.Width(90));
+
+            if (GUILayout.Button("Auto Layout", EditorStyles.toolbarButton, GUILayout.Width(90)))
+            {
+                AutoLayout();
+                SaveLayoutPrefs();
+            }
+
+            if (GUILayout.Button("Save Layout", EditorStyles.toolbarButton, GUILayout.Width(88)))
+                SaveLayoutPrefs();
+
             EditorGUILayout.EndHorizontal();
         }
 
@@ -60,7 +86,7 @@ namespace kkmia.TalkSystem.Editor
             var panelRect = GUILayoutUtility.GetRect(position.width * 0.68f, position.height - 24, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             GUI.Box(panelRect, GUIContent.none);
 
-            var contentRect = new Rect(0, 0, 1400, 1400);
+            var contentRect = CalculateContentRect();
             _graphScroll = GUI.BeginScrollView(panelRect, _graphScroll, contentRect);
 
             var oldMatrix = GUI.matrix;
@@ -72,8 +98,13 @@ namespace kkmia.TalkSystem.Editor
                 node.rect = GUI.Window(node.id, node.rect, DrawNodeWindow, BuildNodeTitle(node));
             EndWindows();
 
+            if (Event.current.type == EventType.MouseUp)
+                SaveLayoutPrefs();
+
             GUI.matrix = oldMatrix;
             GUI.EndScrollView();
+
+            DrawMinimap(panelRect, contentRect);
         }
 
         private void DrawEdges()
@@ -84,6 +115,8 @@ namespace kkmia.TalkSystem.Editor
                 var from = _model.Find(edge.FromId);
                 var to = _model.Find(edge.ToId);
                 if (from == null) continue;
+                if (!IsVisible(from)) continue;
+                if (to != null && !IsVisible(to) && !edge.IsBroken) continue;
 
                 var start = new Vector3(from.rect.xMax, from.rect.center.y, 0);
                 var end = to != null ? new Vector3(to.rect.xMin, to.rect.center.y, 0) : new Vector3(from.rect.xMax + 120, from.rect.center.y + 60, 0);
@@ -157,7 +190,10 @@ namespace kkmia.TalkSystem.Editor
             _selected.autoNextSeconds = EditorGUILayout.FloatField("AutoNextSeconds", _selected.autoNextSeconds);
 
             if (EditorGUI.EndChangeCheck())
+            {
                 DialogueGraphMapper.RebuildEdges(_model);
+                SaveLayoutPrefs();
+            }
 
             EditorGUILayout.Space();
             if (GUILayout.Button("Delete Node"))
@@ -173,7 +209,9 @@ namespace kkmia.TalkSystem.Editor
         {
             if (_csvFile == null) return;
             _model = DialogueGraphMapper.FromCsv(_csvFile.text);
+            RestoreLayoutPrefs();
             _selected = _model.Nodes.FirstOrDefault();
+            FocusSelectedNode();
         }
 
         private void Save()
@@ -192,28 +230,179 @@ namespace kkmia.TalkSystem.Editor
                 speaker = "Speaker",
                 text = "New dialogue line",
                 nextId = -1,
-                rect = new Rect(80, 80, 260, 170)
+                rect = new Rect(_graphScroll.x / _zoom + 80, _graphScroll.y / _zoom + 80, NodeWidth, NodeHeight)
             };
 
             ((System.Collections.Generic.List<DialogueGraphNode>)_model.Nodes).Add(node);
             _selected = node;
             DialogueGraphMapper.RebuildEdges(_model);
+            SaveLayoutPrefs();
         }
 
         private bool IsVisible(DialogueGraphNode node)
         {
             if (_showOnlyProblems)
             {
-                var hasProblem = _model.Edges.Any(e => e.IsBroken && e.FromId == node.id) ||
-                                 _model.Diagnostics.Messages.Any(m => m.Message.Contains(node.id.ToString()));
-                if (!hasProblem) return false;
+                if (!NodeHasProblem(node)) return false;
+            }
+
+            if (_showOnlyBrokenLinks && !_model.Edges.Any(e => e.IsBroken && e.FromId == node.id))
+                return false;
+
+            if (_showOnlyTriggerEntries && string.IsNullOrEmpty(node.triggerKey))
+                return false;
+
+            if (!string.IsNullOrWhiteSpace(_speakerFilter))
+            {
+                var speaker = node.speaker ?? string.Empty;
+                if (speaker.IndexOf(_speakerFilter, StringComparison.OrdinalIgnoreCase) < 0)
+                    return false;
             }
 
             if (string.IsNullOrWhiteSpace(_search))
                 return true;
 
-            var haystack = (node.id + " " + node.speaker + " " + node.text + " " + node.triggerKey + " " + node.conditionKey + " " + node.eventKey).ToLowerInvariant();
-            return haystack.Contains(_search.ToLowerInvariant());
+            return MatchesSearch(node, _search);
+        }
+
+        private bool MatchesSearch(DialogueGraphNode node, string search)
+        {
+            if (node == null || string.IsNullOrWhiteSpace(search)) return true;
+
+            var haystack = node.id + " " + node.speaker + " " + node.text + " " + node.triggerKey + " " + node.conditionKey + " " + node.eventKey + " " + node.choicesRaw;
+            return haystack.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private bool NodeHasProblem(DialogueGraphNode node)
+        {
+            return _model.Edges.Any(e => e.IsBroken && e.FromId == node.id) ||
+                   _model.Diagnostics.Messages.Any(m => m.Message.IndexOf(node.id.ToString(), StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        private void FocusFirstSearchResult()
+        {
+            var node = _model.Nodes.FirstOrDefault(IsVisible);
+            if (node == null) return;
+
+            _selected = node;
+            FocusSelectedNode();
+        }
+
+        private void FocusSelectedNode()
+        {
+            if (_selected == null) return;
+
+            _graphScroll = new Vector2(
+                Mathf.Max(0f, _selected.rect.x * _zoom - position.width * 0.25f),
+                Mathf.Max(0f, _selected.rect.y * _zoom - position.height * 0.35f));
+        }
+
+        private Rect CalculateContentRect()
+        {
+            if (_model.Nodes.Count == 0)
+                return new Rect(0, 0, 1400, 1400);
+
+            var maxX = _model.Nodes.Max(n => n.rect.xMax) * _zoom + 400;
+            var maxY = _model.Nodes.Max(n => n.rect.yMax) * _zoom + 400;
+            return new Rect(0, 0, Mathf.Max(1400, maxX), Mathf.Max(1400, maxY));
+        }
+
+        private void AutoLayout()
+        {
+            if (_model.Nodes.Count == 0) return;
+
+            var ordered = _model.Nodes
+                .OrderByDescending(n => !string.IsNullOrEmpty(n.triggerKey))
+                .ThenBy(n => n.id)
+                .ToList();
+
+            var columns = Mathf.Max(1, Mathf.CeilToInt(Mathf.Sqrt(ordered.Count)));
+            for (var i = 0; i < ordered.Count; i++)
+            {
+                ordered[i].rect = new Rect(40 + (i % columns) * 310, 40 + (i / columns) * 230, NodeWidth, NodeHeight);
+            }
+        }
+
+        private void DrawMinimap(Rect panelRect, Rect contentRect)
+        {
+            if (_model.Nodes.Count == 0) return;
+
+            var minimap = new Rect(panelRect.xMax - 184, panelRect.y + 12, 168, 128);
+            GUI.Box(minimap, "Overview");
+
+            var graphBounds = CalculateNodeBounds();
+            if (graphBounds.width <= 0 || graphBounds.height <= 0) return;
+
+            var scaleX = (minimap.width - 18) / graphBounds.width;
+            var scaleY = (minimap.height - 28) / graphBounds.height;
+            var scale = Mathf.Max(0.02f, Mathf.Min(scaleX, scaleY));
+
+            foreach (var node in _model.Nodes)
+            {
+                var x = minimap.x + 9 + (node.rect.x - graphBounds.x) * scale;
+                var y = minimap.y + 20 + (node.rect.y - graphBounds.y) * scale;
+                var nodeRect = new Rect(x, y, Mathf.Max(3, node.rect.width * scale), Mathf.Max(3, node.rect.height * scale));
+                GUI.color = node == _selected ? new Color(0.2f, 0.8f, 1f) : NodeHasProblem(node) ? Color.red : Color.white;
+                GUI.Box(nodeRect, GUIContent.none);
+            }
+
+            GUI.color = new Color(0.4f, 1f, 0.4f);
+            var viewRect = new Rect(
+                minimap.x + 9 + (_graphScroll.x / _zoom - graphBounds.x) * scale,
+                minimap.y + 20 + (_graphScroll.y / _zoom - graphBounds.y) * scale,
+                (panelRect.width / _zoom) * scale,
+                (panelRect.height / _zoom) * scale);
+            GUI.Box(viewRect, GUIContent.none);
+            GUI.color = Color.white;
+        }
+
+        private Rect CalculateNodeBounds()
+        {
+            if (_model.Nodes.Count == 0)
+                return new Rect(0, 0, 1, 1);
+
+            var minX = _model.Nodes.Min(n => n.rect.x);
+            var minY = _model.Nodes.Min(n => n.rect.y);
+            var maxX = _model.Nodes.Max(n => n.rect.xMax);
+            var maxY = _model.Nodes.Max(n => n.rect.yMax);
+            return new Rect(minX, minY, Mathf.Max(1, maxX - minX), Mathf.Max(1, maxY - minY));
+        }
+
+        private string LayoutPrefsKey
+        {
+            get
+            {
+                if (_csvFile == null) return string.Empty;
+                return LayoutPrefsPrefix + AssetDatabase.GetAssetPath(_csvFile);
+            }
+        }
+
+        private void SaveLayoutPrefs()
+        {
+            var key = LayoutPrefsKey;
+            if (string.IsNullOrEmpty(key) || _model.Nodes.Count == 0) return;
+
+            var snapshot = new LayoutSnapshot();
+            foreach (var node in _model.Nodes)
+                snapshot.nodes.Add(new LayoutNode { id = node.id, x = node.rect.x, y = node.rect.y });
+
+            EditorPrefs.SetString(key, JsonUtility.ToJson(snapshot));
+        }
+
+        private void RestoreLayoutPrefs()
+        {
+            var key = LayoutPrefsKey;
+            if (string.IsNullOrEmpty(key) || !EditorPrefs.HasKey(key)) return;
+
+            var snapshot = JsonUtility.FromJson<LayoutSnapshot>(EditorPrefs.GetString(key));
+            if (snapshot == null || snapshot.nodes == null) return;
+
+            foreach (var saved in snapshot.nodes)
+            {
+                var node = _model.Find(saved.id);
+                if (node != null)
+                    node.rect = new Rect(saved.x, saved.y, NodeWidth, NodeHeight);
+            }
         }
 
         private string BuildNodeTitle(DialogueGraphNode node)
@@ -226,6 +415,20 @@ namespace kkmia.TalkSystem.Editor
         {
             if (string.IsNullOrEmpty(value)) return string.Empty;
             return value.Length <= 48 ? value : value.Substring(0, 45) + "...";
+        }
+
+        [Serializable]
+        private sealed class LayoutSnapshot
+        {
+            public List<LayoutNode> nodes = new List<LayoutNode>();
+        }
+
+        [Serializable]
+        private sealed class LayoutNode
+        {
+            public int id;
+            public float x;
+            public float y;
         }
     }
 }
