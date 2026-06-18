@@ -1,18 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Globalization;
 using UnityEngine;
 
 namespace kkmia.TalkSystem
 {
     public static class CsvLoader
     {
-        /// <summary>
-        /// CSVファイルを読み込んで辞書に変換します。
-        /// </summary>
-        /// <typeparam name="T">DialogueDataを継承した型</typeparam>
-        /// <param name="csv">TextAsset 形式のCSVファイル</param>
-        /// <returns>Idをキーとした辞書</returns>
         public static Dictionary<int, T> Parse<T>(TextAsset csv) where T : DialogueData, new()
         {
             if (csv == null)
@@ -21,63 +15,128 @@ namespace kkmia.TalkSystem
                 return new Dictionary<int, T>();
             }
 
-            var dict = new Dictionary<int, T>();
-            var lines = csv.text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+            return ParseText<T>(csv.text);
+        }
 
-            if (lines.Length <= 1)
+        public static Dictionary<int, T> ParseText<T>(string csvText) where T : DialogueData, new()
+        {
+            var report = new DialogueValidationReport();
+            var document = DialogueCsvCodec.Parse(csvText);
+            report.AddRange(document.Diagnostics.Messages);
+
+            var rows = ParseRows<T>(document, report);
+            var dict = new Dictionary<int, T>();
+
+            foreach (var row in rows)
             {
-                Debug.LogWarning("CsvLoader: データ行が存在しません。");
-                return dict;
+                if (dict.ContainsKey(row.Id))
+                {
+                    Debug.LogWarning($"CsvLoader: 重複するIDが見つかりました ({row.Id})。最初の行を維持します。");
+                    continue;
+                }
+
+                dict.Add(row.Id, row);
             }
 
-            for (int i = 1; i < lines.Length; i++) // 1行目はヘッダー行
+            foreach (var message in report.Messages)
             {
-                var line = lines[i];
-                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#")) continue;
-
-                var cols = line.Split(',');
-
-                try
-                {
-                    var obj = new T
-                    {
-                        Id           = ParseInt(cols, 0),
-                        Speaker      = GetSafe(cols, 1),
-                        Text         = GetSafe(cols, 2),
-                        NextId       = ParseInt(cols, 3),
-                        EmotionKey   = GetSafe(cols, 4),
-                        TriggerKey   = GetSafe(cols, 5),
-                        ConditionKey = GetSafe(cols, 6)
-                    };
-
-                    if (!dict.ContainsKey(obj.Id))
-                        dict[obj.Id] = obj;
-                    else
-                        Debug.LogWarning($"CsvLoader: 重複するIDが見つかりました ({obj.Id})。上書きされます。");
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"CsvLoader: 行のパースに失敗しました（{i+1}行目）。内容: \"{line}\"\n例外: {e.Message}");
-                }
+                if (message.Severity == DialogueValidationSeverity.Error)
+                    Debug.LogError("CsvLoader: " + message);
+                else if (message.Severity == DialogueValidationSeverity.Warning)
+                    Debug.LogWarning("CsvLoader: " + message);
             }
 
             return dict;
         }
 
-        private static string GetSafe(string[] cols, int index)
+        internal static List<T> ParseRows<T>(DialogueCsvDocument document, DialogueValidationReport report) where T : DialogueData, new()
         {
-            return (index < cols.Length) ? cols[index] : null;
+            var result = new List<T>();
+            if (document == null || document.Headers == null || document.Headers.Count == 0)
+            {
+                report?.Add(DialogueValidationSeverity.Error, 1, string.Empty, "CSV header row is missing.");
+                return result;
+            }
+
+            var map = DialogueSchema.BuildHeaderMap(document.Headers);
+
+            foreach (var row in document.Rows)
+            {
+                var values = row.Values;
+                if (IsCommentOrBlank(values))
+                    continue;
+
+                try
+                {
+                    var data = new T
+                    {
+                        RowNumber = row.RowNumber,
+                        Id = ParseInt(values, map, DialogueSchema.Id, 0, -1),
+                        Speaker = Get(values, map, DialogueSchema.Speaker, 1),
+                        Text = Get(values, map, DialogueSchema.Text, 2),
+                        NextId = ParseInt(values, map, DialogueSchema.NextId, 3, -1),
+                        EmotionKey = Get(values, map, DialogueSchema.EmotionKey, 4),
+                        TriggerKey = Get(values, map, DialogueSchema.TriggerKey, 5),
+                        ConditionKey = Get(values, map, DialogueSchema.ConditionKey, 6),
+                        EventKey = Get(values, map, DialogueSchema.EventKey, -1),
+                        ChoicesRaw = Get(values, map, DialogueSchema.Choices, -1),
+                        AutoNextSeconds = ParseFloat(values, map, DialogueSchema.AutoNextSeconds, -1, -1f)
+                    };
+
+                    result.Add(data);
+                }
+                catch (Exception e)
+                {
+                    report?.Add(DialogueValidationSeverity.Error, row.RowNumber, string.Empty, e.Message);
+                }
+            }
+
+            return result;
         }
 
-        private static int ParseInt(string[] cols, int index)
+        private static bool IsCommentOrBlank(IReadOnlyList<string> values)
         {
-            if (index >= cols.Length || string.IsNullOrWhiteSpace(cols[index]))
-                return -1;
+            if (values == null || values.Count == 0) return true;
+            if (values.Count == 1 && string.IsNullOrWhiteSpace(values[0])) return true;
+            return values[0] != null && values[0].TrimStart().StartsWith("#");
+        }
 
-            if (int.TryParse(cols[index], out int result))
+        private static string Get(IReadOnlyList<string> values, Dictionary<string, int> map, string name, int fallbackIndex)
+        {
+            int index;
+            if (!map.TryGetValue(name, out index))
+                index = fallbackIndex;
+
+            if (index < 0 || index >= values.Count)
+                return string.Empty;
+
+            return values[index] ?? string.Empty;
+        }
+
+        private static int ParseInt(IReadOnlyList<string> values, Dictionary<string, int> map, string name, int fallbackIndex, int defaultValue)
+        {
+            var raw = Get(values, map, name, fallbackIndex);
+            if (string.IsNullOrWhiteSpace(raw))
+                return defaultValue;
+
+            int result;
+            if (int.TryParse(raw, out result))
                 return result;
 
-            throw new FormatException($"数値変換に失敗: {cols[index]}");
+            throw new FormatException(name + " の数値変換に失敗しました: " + raw);
+        }
+
+        private static float ParseFloat(IReadOnlyList<string> values, Dictionary<string, int> map, string name, int fallbackIndex, float defaultValue)
+        {
+            var raw = Get(values, map, name, fallbackIndex);
+            if (string.IsNullOrWhiteSpace(raw))
+                return defaultValue;
+
+            float result;
+            if (float.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out result))
+                return result;
+
+            throw new FormatException(name + " の数値変換に失敗しました: " + raw);
         }
     }
 }

@@ -18,5 +18,33 @@ It provides a simple and extensible structure for branching conversations, and c
 - Editable dialogue CSV via a custom Unity Editor tool
 - Clear separation of logic (Manager, Presenter, View)
 
+## Runtime extension points
+
+TalkSystem keeps the existing CSV workflow, while adding extension points for larger projects.
+
+- `IDialogueConditionEvaluator`: evaluates `ConditionKey`
+- `IDialogueVariableResolver`: resolves text placeholders such as `{playerName}`
+- `IDialogueTextResolver`: swaps inline text, localization keys, or external localization backends
+- `IDialogueEventDispatcher`: reacts to `EventKey`
+- `DialogueSaveData`: captures/restores current line, seen lines, choices, and trigger state
+
+Optional CSV columns are supported after the original schema:
+
+```csv
+Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey,EventKey,Choices,AutoNextSeconds
+1,Guide,"Hello, {playerName}",-1,,,has_met_guide,greet,"Yes->2|No->3",
+```
+
+`Choices` uses `Label->NextId` entries separated by `|`. A choice can add a condition with `?conditionKey`, for example `Buy->10?has_money|Leave->20`.
+
+## Editor tools
+
+Open these from Unity:
+
+- `Tools/kkmia/Dialogue CSV Editor`
+- `Tools/kkmia/Dialogue Validator`
+- `Tools/kkmia/Dialogue Preview`
+
+The CSV editor now round-trips quoted fields, commas, escaped quotes, and multiline text through the shared runtime CSV codec.
 
 This software is released under the MIT License, see LICENSE.txt.

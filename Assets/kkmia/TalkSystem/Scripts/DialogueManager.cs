@@ -1,19 +1,12 @@
-using UnityEngine;
 using System;
 using System.Linq;
+using UnityEngine;
 
 namespace kkmia.TalkSystem
 {
-    /// <summary>
-    /// 会話システムの制御を担当するマネージャクラス。  
-    /// CSVファイルを基に会話を開始・終了し、View に情報を流し込む役割を持つ。
-    /// </summary>
     [DisallowMultipleComponent]
     public class DialogueManager : MonoBehaviour
     {
-        /// <summary>
-        /// シングルトンインスタンス
-        /// </summary>
         public static DialogueManager Instance { get; private set; }
 
         [Header("CSVファイル")]
@@ -24,8 +17,31 @@ namespace kkmia.TalkSystem
         [Tooltip("シーン内のViewが自動登録される場合は設定不要")]
         [SerializeField] private DialogueView view;
 
+        [Header("Localization")]
+        [SerializeField] private string languageKey = string.Empty;
+
         private DialoguePresenter _presenter;
         private IDialogueRepository _repository;
+        private IDialogueConditionEvaluator _conditionEvaluator = new AllowAllDialogueConditionEvaluator();
+        private IDialogueVariableResolver _variableResolver = new EmptyDialogueVariableResolver();
+        private IDialogueTextResolver _textResolver = new DefaultDialogueTextResolver();
+        private IDialogueEventDispatcher _eventDispatcher;
+
+        public event Action<DialogueEventContext> LineStarted;
+        public event Action<DialogueEventContext> LineCompleted;
+        public event Action<DialogueEventContext> DialogueEnded;
+        public event Action<DialogueEventContext> DialogueEventTriggered;
+        public event Action<string> ErrorRaised;
+
+        public IDialogueRepository Repository
+        {
+            get { return _repository; }
+        }
+
+        public DialogueSessionState State
+        {
+            get { return _presenter != null ? _presenter.State : DialogueSessionState.Idle; }
+        }
 
         private void Awake()
         {
@@ -46,29 +62,77 @@ namespace kkmia.TalkSystem
             }
 
             _repository = new DialogueRepository(csvFile);
+            _eventDispatcher = new DelegateDialogueEventDispatcher(context =>
+            {
+                if (DialogueEventTriggered != null)
+                    DialogueEventTriggered(context);
+            });
 
             if (view != null)
-            {
-                _presenter = new DialoguePresenter(_repository, view);
-                view.Clear();
-                view.gameObject.SetActive(false);
-            }
+                SetView(view);
         }
 
-        /// <summary>
-        /// 外部から DialogueView を登録する。シーンごとに呼び出すことで View を切り替え可能。
-        /// </summary>
+        private void OnDestroy()
+        {
+            if (Instance == this)
+                Instance = null;
+
+            DisposePresenter();
+        }
+
+        public void SetConditionEvaluator(IDialogueConditionEvaluator evaluator)
+        {
+            _conditionEvaluator = evaluator ?? new AllowAllDialogueConditionEvaluator();
+            ApplyPresenterConfiguration();
+        }
+
+        public void SetVariableResolver(IDialogueVariableResolver resolver)
+        {
+            _variableResolver = resolver ?? new EmptyDialogueVariableResolver();
+            ApplyPresenterConfiguration();
+        }
+
+        public void SetTextResolver(IDialogueTextResolver resolver)
+        {
+            _textResolver = resolver ?? new DefaultDialogueTextResolver();
+            ApplyPresenterConfiguration();
+        }
+
+        public void SetLanguage(string newLanguageKey)
+        {
+            languageKey = newLanguageKey ?? string.Empty;
+            ApplyPresenterConfiguration();
+        }
+
+        public void SetEventDispatcher(IDialogueEventDispatcher dispatcher)
+        {
+            _eventDispatcher = dispatcher;
+            ApplyPresenterConfiguration();
+        }
+
         public void SetView(DialogueView newView)
         {
             view = newView ?? throw new ArgumentNullException(nameof(newView));
+
+            if (_repository == null)
+            {
+                Debug.LogError("DialogueManager: Repository が初期化されていません。");
+                return;
+            }
+
+            DisposePresenter();
             _presenter = new DialoguePresenter(_repository, view);
-            
+            _presenter.LineStarted += RaiseLineStarted;
+            _presenter.LineCompleted += RaiseLineCompleted;
+            _presenter.DialogueEnded += RaiseDialogueEnded;
+            _presenter.ErrorRaised += RaiseError;
+            ApplyPresenterConfiguration();
+
+            view.Clear();
+            view.gameObject.SetActive(false);
             Debug.Log("[DialogueManager] View がセットされました。");
         }
 
-        /// <summary>
-        /// 指定したIDの会話を開始します。
-        /// </summary>
         public void StartDialogue(int id)
         {
             if (!EnsureReady()) return;
@@ -80,27 +144,17 @@ namespace kkmia.TalkSystem
             _presenter.Start(id);
         }
 
-        /// <summary>
-        /// 条件に一致する最初の会話データを取得して開始します。
-        /// </summary>
         public void StartDialogue(Func<DialogueData, bool> predicate)
         {
             if (!EnsureReady()) return;
 
             var data = _repository.GetAll().FirstOrDefault(predicate);
             if (data != null)
-            {
                 StartDialogue(data.Id);
-            }
             else
-            {
                 Debug.LogWarning("DialogueManager: 該当する会話データが見つかりません。");
-            }
         }
 
-        /// <summary>
-        /// 指定されたTriggerKeyをもとに会話を開始します。
-        /// </summary>
         public void StartDialogueForState(string triggerKey)
         {
             if (!EnsureReady()) return;
@@ -113,30 +167,63 @@ namespace kkmia.TalkSystem
 
             var data = _repository.GetByTriggerKey(triggerKey);
             if (data != null)
-            {
-                StartDialogue(data.Id);
-            }
+                StartDialogue(data.Id, triggerKey);
             else
-            {
                 Debug.LogWarning($"DialogueManager: TriggerKey \"{triggerKey}\" に該当するデータがありません。");
-            }
         }
 
-        /// <summary>
-        /// 表示中の会話を強制終了します。
-        /// </summary>
         public void EndDialogue()
+        {
+            if (!EnsureReady()) return;
+
+            _presenter.End();
+            view.gameObject.SetActive(false);
+        }
+
+        public DialogueSaveData CaptureState()
+        {
+            return _presenter != null ? _presenter.CaptureState() : new DialogueSaveData();
+        }
+
+        public bool RestoreState(DialogueSaveData saveData)
+        {
+            if (!EnsureReady()) return false;
+            view.gameObject.SetActive(true);
+            return _presenter.RestoreState(saveData);
+        }
+
+        private void StartDialogue(int id, string triggerKey)
         {
             if (!EnsureReady()) return;
 
             view.ForceStop();
             view.Clear();
-            view.gameObject.SetActive(false);
+            view.gameObject.SetActive(true);
+
+            _presenter.Start(id, triggerKey);
         }
 
-        /// <summary>
-        /// Repository や View が有効かをチェック
-        /// </summary>
+        private void ApplyPresenterConfiguration()
+        {
+            if (_presenter == null) return;
+            _presenter.SetConditionEvaluator(_conditionEvaluator);
+            _presenter.SetVariableResolver(_variableResolver);
+            _presenter.SetTextResolver(_textResolver);
+            _presenter.SetLanguage(languageKey);
+            _presenter.SetEventDispatcher(_eventDispatcher);
+        }
+
+        private void DisposePresenter()
+        {
+            if (_presenter == null) return;
+            _presenter.LineStarted -= RaiseLineStarted;
+            _presenter.LineCompleted -= RaiseLineCompleted;
+            _presenter.DialogueEnded -= RaiseDialogueEnded;
+            _presenter.ErrorRaised -= RaiseError;
+            _presenter.Dispose();
+            _presenter = null;
+        }
+
         private bool EnsureReady()
         {
             if (_repository == null)
@@ -158,6 +245,26 @@ namespace kkmia.TalkSystem
             }
 
             return true;
+        }
+
+        private void RaiseLineStarted(DialogueEventContext context)
+        {
+            if (LineStarted != null) LineStarted(context);
+        }
+
+        private void RaiseLineCompleted(DialogueEventContext context)
+        {
+            if (LineCompleted != null) LineCompleted(context);
+        }
+
+        private void RaiseDialogueEnded(DialogueEventContext context)
+        {
+            if (DialogueEnded != null) DialogueEnded(context);
+        }
+
+        private void RaiseError(string message)
+        {
+            if (ErrorRaised != null) ErrorRaised(message);
         }
     }
 }

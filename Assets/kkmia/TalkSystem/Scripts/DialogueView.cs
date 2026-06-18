@@ -1,10 +1,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
-// using DG.Tweening;
 
 namespace kkmia.TalkSystem
 {
@@ -15,7 +14,7 @@ namespace kkmia.TalkSystem
         public Sprite sprite;
     }
 
-    public class DialogueView : MonoBehaviour
+    public class DialogueView : MonoBehaviour, IDialogueView
     {
         [SerializeField] private TMP_Text speakerText;
         [SerializeField] private TMP_Text bodyText;
@@ -24,12 +23,42 @@ namespace kkmia.TalkSystem
         [SerializeField] private Image dialogWindow;
         [SerializeField] private Sprite defaultSprite;
         [SerializeField] private TypewriterEffect typewriter;
-        [SerializeField] private List<CharacterSprite> characterSprites;
+        [SerializeField] private List<CharacterSprite> characterSprites = new List<CharacterSprite>();
+        [SerializeField] private CharacterExpressionDatabase characterDatabase;
+
+        [Header("Choices")]
+        [SerializeField] private Transform choicesContainer;
+        [SerializeField] private Button choiceButtonPrefab;
+        [SerializeField] private bool fallbackNextButtonSelectsFirstChoice = true;
+
+        [Header("Auto Advance")]
+        [SerializeField] private bool enableAutoNext;
+        [SerializeField] private float defaultAutoNextSeconds = 1f;
 
         public event Action OnNextRequested;
+        public event Action<int> OnChoiceSelected;
+
+        event Action IDialogueView.NextRequested
+        {
+            add { OnNextRequested += value; }
+            remove { OnNextRequested -= value; }
+        }
+
+        event Action<int> IDialogueView.ChoiceSelected
+        {
+            add { OnChoiceSelected += value; }
+            remove { OnChoiceSelected -= value; }
+        }
+
+        public bool IsTyping
+        {
+            get { return typewriter != null && typewriter.IsTyping; }
+        }
 
         private Sprite initialSprite;
         private Coroutine autoNextCoroutine;
+        private readonly List<Button> _choiceButtons = new List<Button>();
+        private IReadOnlyList<DialogueChoice> _activeChoices = new List<DialogueChoice>();
 
         private void Awake()
         {
@@ -40,58 +69,105 @@ namespace kkmia.TalkSystem
                 initialSprite = defaultSprite != null ? defaultSprite : characterImage.sprite;
         }
 
+        private void OnDestroy()
+        {
+            if (nextButton != null)
+                nextButton.onClick.RemoveListener(HandleNextButtonClicked);
+        }
+
         public void Show(DialogueData data, Action onComplete)
+        {
+            Show(data, new List<DialogueChoice>(), onComplete);
+        }
+
+        public void Show(DialogueData data, IReadOnlyList<DialogueChoice> choices, Action onComplete)
         {
             ForceStop();
             CancelAutoNextTimer();
+            ClearChoiceButtons();
 
-            gameObject.SetActive(false); // UI再描画対策
+            _activeChoices = choices ?? new List<DialogueChoice>();
+
+            gameObject.SetActive(false);
             gameObject.SetActive(true);
 
             if (dialogWindow != null)
                 dialogWindow.gameObject.SetActive(true);
 
-            if (speakerText != null)
-                speakerText.text = data.Speaker;
+            ApplySpeaker(data);
 
             if (bodyText != null)
                 bodyText.text = string.Empty;
 
-            UpdateCharacterSprite(data.EmotionKey);
+            UpdateCharacterSprite(data);
 
             if (nextButton != null)
                 nextButton.gameObject.SetActive(false);
 
             if (typewriter != null)
             {
-                typewriter.Play(data.Text, () =>
-                {
-                    if (nextButton != null)
-                        nextButton.gameObject.SetActive(true);
-
-                    StartAutoNextTimer();
-                    onComplete?.Invoke();
-                });
+                typewriter.Play(data.Text, () => CompleteLine(data, onComplete));
             }
             else
             {
-                bodyText.text = data.Text;
+                if (bodyText != null)
+                    bodyText.text = data.Text;
 
-                if (nextButton != null)
-                    nextButton.gameObject.SetActive(true);
-
-                StartAutoNextTimer();
-                onComplete?.Invoke();
+                CompleteLine(data, onComplete);
             }
         }
 
-        private void UpdateCharacterSprite(string emotionKey)
+        public void CompleteTyping()
+        {
+            if (typewriter != null && typewriter.IsTyping)
+                typewriter.Complete();
+        }
+
+        private void CompleteLine(DialogueData data, Action onComplete)
+        {
+            DrawChoices();
+
+            if (nextButton != null)
+            {
+                var hasChoices = _activeChoices != null && _activeChoices.Count > 0;
+                var canFallbackChoice = hasChoices && _choiceButtons.Count == 0 && fallbackNextButtonSelectsFirstChoice;
+                nextButton.gameObject.SetActive(!hasChoices || canFallbackChoice);
+            }
+
+            StartAutoNextTimer(data);
+            if (onComplete != null)
+                onComplete();
+        }
+
+        private void ApplySpeaker(DialogueData data)
+        {
+            if (speakerText == null || data == null) return;
+
+            CharacterDefinition character;
+            if (characterDatabase != null && characterDatabase.TryGetCharacter(data.Speaker, out character))
+            {
+                speakerText.text = string.IsNullOrEmpty(character.displayName) ? data.Speaker : character.displayName;
+                speakerText.color = character.nameColor;
+                return;
+            }
+
+            speakerText.text = data.Speaker;
+        }
+
+        private void UpdateCharacterSprite(DialogueData data)
         {
             if (characterImage == null) return;
 
             characterImage.gameObject.SetActive(true);
 
-            if (string.IsNullOrEmpty(emotionKey))
+            Sprite resolved;
+            if (data != null && characterDatabase != null && characterDatabase.TryGetSprite(data.Speaker, data.EmotionKey, out resolved))
+            {
+                characterImage.sprite = resolved;
+                return;
+            }
+
+            if (data == null || string.IsNullOrEmpty(data.EmotionKey))
             {
                 characterImage.sprite = initialSprite;
                 return;
@@ -99,7 +175,7 @@ namespace kkmia.TalkSystem
 
             foreach (var character in characterSprites)
             {
-                if (character.key == emotionKey)
+                if (character.key == data.EmotionKey)
                 {
                     characterImage.sprite = character.sprite;
                     return;
@@ -109,24 +185,64 @@ namespace kkmia.TalkSystem
             characterImage.sprite = initialSprite;
         }
 
+        private void DrawChoices()
+        {
+            if (_activeChoices == null || _activeChoices.Count == 0 || choicesContainer == null || choiceButtonPrefab == null)
+                return;
+
+            for (var i = 0; i < _activeChoices.Count; i++)
+            {
+                var index = i;
+                var button = Instantiate(choiceButtonPrefab, choicesContainer);
+                var label = button.GetComponentInChildren<TMP_Text>();
+                if (label != null)
+                    label.text = _activeChoices[i].Text;
+
+                button.onClick.AddListener(() => SelectChoice(index));
+                button.gameObject.SetActive(true);
+                _choiceButtons.Add(button);
+            }
+        }
+
+        private void SelectChoice(int index)
+        {
+            CancelAutoNextTimer();
+            ClearChoiceButtons();
+            if (OnChoiceSelected != null)
+                OnChoiceSelected(index);
+        }
+
         private void HandleNextButtonClicked()
         {
             CancelAutoNextTimer();
 
-            if (typewriter != null && typewriter.IsTyping)
+            if (IsTyping)
             {
-                typewriter.Complete();
+                CompleteTyping();
+                return;
             }
-            else
+
+            if (_activeChoices != null && _activeChoices.Count > 0 && _choiceButtons.Count == 0 && fallbackNextButtonSelectsFirstChoice)
             {
-                OnNextRequested?.Invoke();
+                SelectChoice(0);
+                return;
             }
+
+            if (OnNextRequested != null)
+                OnNextRequested();
         }
 
-        private void StartAutoNextTimer()
+        private void StartAutoNextTimer(DialogueData data)
         {
             CancelAutoNextTimer();
-            autoNextCoroutine = StartCoroutine(AutoNextCoroutine());
+            if (_activeChoices != null && _activeChoices.Count > 0)
+                return;
+
+            var seconds = data != null && data.AutoNextSeconds >= 0f ? data.AutoNextSeconds : defaultAutoNextSeconds;
+            if (!enableAutoNext && (data == null || data.AutoNextSeconds < 0f))
+                return;
+
+            autoNextCoroutine = StartCoroutine(AutoNextCoroutine(Mathf.Max(0f, seconds)));
         }
 
         private void CancelAutoNextTimer()
@@ -138,10 +254,11 @@ namespace kkmia.TalkSystem
             }
         }
 
-        private IEnumerator AutoNextCoroutine()
+        private IEnumerator AutoNextCoroutine(float seconds)
         {
-            yield return new WaitForSeconds(1f);
-            OnNextRequested?.Invoke();
+            yield return new WaitForSeconds(seconds);
+            if (OnNextRequested != null)
+                OnNextRequested();
         }
 
         public void StartDelay(float seconds, Action onCompleted)
@@ -153,13 +270,16 @@ namespace kkmia.TalkSystem
         private IEnumerator DelayCoroutine(float seconds, Action onCompleted)
         {
             yield return new WaitForSeconds(seconds);
-            onCompleted?.Invoke();
+            if (onCompleted != null)
+                onCompleted();
         }
 
         public void Clear()
         {
             ForceStop();
             CancelAutoNextTimer();
+            ClearChoiceButtons();
+            _activeChoices = new List<DialogueChoice>();
 
             if (speakerText != null)
                 speakerText.text = string.Empty;
@@ -184,7 +304,7 @@ namespace kkmia.TalkSystem
         {
             CancelAutoNextTimer();
             if (typewriter != null && typewriter.IsTyping)
-                typewriter.Complete();
+                typewriter.Cancel();
         }
 
         public void SetTypewriterSpeed(float newInterval)
@@ -193,22 +313,15 @@ namespace kkmia.TalkSystem
                 typewriter.SetInterval(newInterval);
         }
 
-        /*public void StartFadeOutWindowAndCharacter()
+        private void ClearChoiceButtons()
         {
-            FadeOutElement(dialogWindow);
-            FadeOutElement(characterImage);
-        }*/
+            for (var i = 0; i < _choiceButtons.Count; i++)
+            {
+                if (_choiceButtons[i] != null)
+                    Destroy(_choiceButtons[i].gameObject);
+            }
 
-        /*private void FadeOutElement(Graphic target)
-        {
-            if (target == null) return;
-
-            var canvasGroup = target.GetComponent<CanvasGroup>();
-            if (canvasGroup == null)
-                canvasGroup = target.gameObject.AddComponent<CanvasGroup>();
-
-            canvasGroup.alpha = 1f;
-            canvasGroup.DOFade(0f, 1.5f).SetEase(Ease.InOutQuad);
-        }*/
+            _choiceButtons.Clear();
+        }
     }
 }

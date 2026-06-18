@@ -4,9 +4,6 @@ using UnityEngine;
 
 namespace kkmia.TalkSystem
 {
-    /// <summary>
-    /// CSVから読み込まれた会話データを保持・提供するリポジトリ
-    /// </summary>
     public class DialogueRepository : IDialogueRepository
     {
         private readonly Dictionary<int, DialogueData> _cache;
@@ -17,27 +14,43 @@ namespace kkmia.TalkSystem
             {
                 Debug.LogError("[DialogueRepository] CSVファイルが設定されていません。空のリポジトリとして初期化されます。");
                 _cache = new Dictionary<int, DialogueData>();
+                ValidationReport = new DialogueValidationReport();
+                ValidationReport.Add(DialogueValidationSeverity.Error, 0, string.Empty, "CSV file is not assigned.");
                 return;
             }
 
             _cache = CsvLoader.Parse<DialogueData>(csv);
+            ValidationReport = DialogueValidator.ValidateData(_cache.Values);
         }
 
-        /// <summary>
-        /// IDから1件の会話データを取得します
-        /// </summary>
-        public DialogueData Get(int id) =>
-            _cache.TryGetValue(id, out var data) ? data : null;
+        public DialogueRepository(IEnumerable<DialogueData> data)
+        {
+            _cache = new Dictionary<int, DialogueData>();
+            if (data != null)
+            {
+                foreach (var item in data)
+                {
+                    if (item != null && !_cache.ContainsKey(item.Id))
+                        _cache.Add(item.Id, item);
+                }
+            }
 
-        /// <summary>
-        /// 全会話データを列挙します
-        /// </summary>
-        public IEnumerable<DialogueData> GetAll() =>
-            _cache.Values;
+            ValidationReport = DialogueValidator.ValidateData(_cache.Values);
+        }
 
-        /// <summary>
-        /// TriggerKey に一致する最初の会話データを取得します
-        /// </summary>
+        public DialogueValidationReport ValidationReport { get; private set; }
+
+        public DialogueData Get(int id)
+        {
+            DialogueData data;
+            return _cache.TryGetValue(id, out data) ? data : null;
+        }
+
+        public IEnumerable<DialogueData> GetAll()
+        {
+            return _cache.Values;
+        }
+
         public DialogueData GetByTriggerKey(string key)
         {
             if (string.IsNullOrEmpty(key)) return null;
