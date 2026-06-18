@@ -1,10 +1,9 @@
 # Quick Start
 
 1. Import the **Feature Tour** sample.
-2. Run `Tools/kkmia/Samples/Create Feature Tour Scene`.
-3. Open `Assets/TalkSystemFeatureTour/FeatureTour.unity`.
-4. Press Play.
-5. Inspect the sample CSV and the `DialogueManager` object.
+2. Open `FeatureTour.unity`.
+3. Press Play.
+4. Inspect the sample CSV and the `DialogueManager` object.
 
 ## Start Dialogue From Code
 

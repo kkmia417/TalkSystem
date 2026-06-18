@@ -29,7 +29,7 @@ Minimum Unity version: `6000.0`.
 
 1. Install the package from the Git URL.
 2. Import the **Feature Tour** sample from Package Manager.
-3. Run `Tools/kkmia/Samples/Create Feature Tour Scene`, open the generated scene, and press Play.
+3. Open `FeatureTour.unity` and press Play.
 4. Open `Tools/kkmia/Dialogue Graph Editor` to inspect the sample dialogue as nodes.
 5. Run `Tools/kkmia/Dialogue Validator` before shipping dialogue changes.
 
