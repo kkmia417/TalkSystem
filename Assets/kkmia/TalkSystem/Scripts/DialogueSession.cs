@@ -64,6 +64,10 @@ namespace kkmia.TalkSystem
                 return false;
             }
 
+            // _skipGuard は「1回の遷移で条件不成立ノードを辿る連鎖」の無限ループ防止用。
+            // 非再帰の入口でクリアし、正当な再訪（ループ会話など）が誤って終了扱いにならないようにする。
+            _skipGuard.Clear();
+
             if (CurrentData.NextId >= 0)
                 return LoadLine(CurrentData.NextId);
 
@@ -76,6 +80,7 @@ namespace kkmia.TalkSystem
             if (index < 0 || index >= CurrentChoices.Count)
                 return false;
 
+            _skipGuard.Clear();
             _choiceHistory.Add(index);
             return LoadLine(CurrentChoices[index].NextId);
         }
@@ -105,6 +110,7 @@ namespace kkmia.TalkSystem
             if (saveData == null)
                 return false;
 
+            _skipGuard.Clear();
             _seenLineIds.Clear();
             if (saveData.SeenLineIds != null)
                 _seenLineIds.AddRange(saveData.SeenLineIds);

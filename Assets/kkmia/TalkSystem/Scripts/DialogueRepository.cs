@@ -7,6 +7,9 @@ namespace kkmia.TalkSystem
     public class DialogueRepository : IDialogueRepository
     {
         private readonly Dictionary<int, DialogueData> _cache;
+        // 挿入順（= CSV 行順）を保持する。Dictionary.Values の列挙順は不定のため、
+        // GetAll / GetByTriggerKey はこのリスト順で走査して結果を決定的にする。
+        private readonly List<DialogueData> _ordered = new List<DialogueData>();
 
         public DialogueRepository(TextAsset csv)
         {
@@ -20,7 +23,8 @@ namespace kkmia.TalkSystem
             }
 
             _cache = CsvLoader.Parse<DialogueData>(csv);
-            ValidationReport = DialogueValidator.ValidateData(_cache.Values);
+            _ordered.AddRange(_cache.Values.OrderBy(d => d.RowNumber));
+            ValidationReport = DialogueValidator.ValidateData(_ordered);
         }
 
         public DialogueRepository(IEnumerable<DialogueData> data)
@@ -31,11 +35,14 @@ namespace kkmia.TalkSystem
                 foreach (var item in data)
                 {
                     if (item != null && !_cache.ContainsKey(item.Id))
+                    {
                         _cache.Add(item.Id, item);
+                        _ordered.Add(item);
+                    }
                 }
             }
 
-            ValidationReport = DialogueValidator.ValidateData(_cache.Values);
+            ValidationReport = DialogueValidator.ValidateData(_ordered);
         }
 
         public DialogueValidationReport ValidationReport { get; private set; }
@@ -48,13 +55,13 @@ namespace kkmia.TalkSystem
 
         public IEnumerable<DialogueData> GetAll()
         {
-            return _cache.Values;
+            return _ordered;
         }
 
         public DialogueData GetByTriggerKey(string key)
         {
             if (string.IsNullOrEmpty(key)) return null;
-            return _cache.Values.FirstOrDefault(d => d.TriggerKey == key);
+            return _ordered.FirstOrDefault(d => d.TriggerKey == key);
         }
     }
 }
