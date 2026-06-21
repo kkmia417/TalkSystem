@@ -74,6 +74,8 @@ namespace kkmia.TalkSystem
                     else
                         triggerKeys.Add(row.TriggerKey, row.RowNumber);
                 }
+
+                ValidateChoiceSyntax(row, report);
             }
 
             foreach (var row in rows)
@@ -91,6 +93,23 @@ namespace kkmia.TalkSystem
 
             ValidateReachability(rows, byId, report, entryIds);
             DetectCycles(rows, byId, report);
+        }
+
+        private static void ValidateChoiceSyntax(DialogueData row, DialogueValidationReport report)
+        {
+            if (string.IsNullOrWhiteSpace(row.ChoicesRaw))
+                return;
+
+            foreach (var entry in row.ChoicesRaw.Split('|'))
+            {
+                if (string.IsNullOrWhiteSpace(entry))
+                    continue;
+
+                DialogueChoice parsed;
+                if (!DialogueChoice.TryParseEntry(entry, out parsed))
+                    report.Add(DialogueValidationSeverity.Warning, row.RowNumber, DialogueSchema.Choices,
+                        "Choice entry could not be parsed and was ignored: \"" + entry.Trim() + "\".");
+            }
         }
 
         private static void ValidateReachability(List<DialogueData> rows, Dictionary<int, DialogueData> byId, DialogueValidationReport report, IEnumerable<int> entryIds)

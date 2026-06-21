@@ -46,5 +46,23 @@ namespace kkmia.TalkSystem.Tests
 
             Assert.IsFalse(report.Messages.Any(m => m.Message.Contains("Cycle detected")));
         }
+
+        [Test]
+        public void ValidateCsv_WarnsOnMalformedChoiceEntries()
+        {
+            var csv = "Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey,EventKey,Choices\n" +
+                      "1,A,Choose,-1,,,,,Good->2|BrokenEntry|AlsoBad->xyz\n" +
+                      "2,A,Target,-1,,,,,\n";
+
+            var report = DialogueValidator.ValidateCsv(csv, new[] { 1 });
+
+            var warnings = report.Messages
+                .Where(m => m.FieldName == DialogueSchema.Choices &&
+                            m.Severity == DialogueValidationSeverity.Warning &&
+                            m.Message.Contains("could not be parsed"))
+                .ToList();
+
+            Assert.AreEqual(2, warnings.Count);
+        }
     }
 }
