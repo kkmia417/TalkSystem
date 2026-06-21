@@ -25,5 +25,26 @@ namespace kkmia.TalkSystem.Tests
 
             Assert.IsTrue(report.Messages.Any(m => m.Message.Contains("unreachable")));
         }
+
+        [Test]
+        public void ValidateCsv_DetectsCycle()
+        {
+            var csv = "Id,Speaker,Text,NextId\n1,A,Hello,2\n2,A,Loop,1\n";
+
+            var report = DialogueValidator.ValidateCsv(csv, new[] { 1 });
+
+            Assert.IsTrue(report.Messages.Any(m =>
+                m.Severity == DialogueValidationSeverity.Info && m.Message.Contains("Cycle detected")));
+        }
+
+        [Test]
+        public void ValidateCsv_DoesNotReportCycleForAcyclicGraph()
+        {
+            var csv = "Id,Speaker,Text,NextId\n1,A,Hello,2\n2,A,End,-1\n";
+
+            var report = DialogueValidator.ValidateCsv(csv, new[] { 1 });
+
+            Assert.IsFalse(report.Messages.Any(m => m.Message.Contains("Cycle detected")));
+        }
     }
 }

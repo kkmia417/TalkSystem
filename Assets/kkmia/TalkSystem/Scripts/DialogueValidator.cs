@@ -124,39 +124,82 @@ namespace kkmia.TalkSystem
             }
         }
 
+        private const int ColorVisiting = 1;
+        private const int ColorDone = 2;
+
+        // 反復DFS（三色マーキング）による循環検出。
+        // 再帰だと長大なチェーンで StackOverflow になり得るため明示スタックで実装する。
         private static void DetectCycles(List<DialogueData> rows, Dictionary<int, DialogueData> byId, DialogueValidationReport report)
         {
-            var visiting = new HashSet<int>();
-            var visited = new HashSet<int>();
+            var color = new Dictionary<int, int>();
+            var reported = new HashSet<int>();
+            var stack = new Stack<int>();
 
-            foreach (var row in rows)
-                Visit(row.Id, byId, visiting, visited, report);
+            foreach (var startRow in rows)
+            {
+                var startId = startRow.Id;
+                int startColor;
+                if (color.TryGetValue(startId, out startColor) && startColor == ColorDone)
+                    continue;
+
+                stack.Push(startId);
+                while (stack.Count > 0)
+                {
+                    var id = stack.Peek();
+                    int state;
+                    color.TryGetValue(id, out state);
+
+                    if (state == ColorVisiting)
+                    {
+                        // 子の探索が完了したノード。完了（黒）にしてスタックから外す。
+                        color[id] = ColorDone;
+                        stack.Pop();
+                        continue;
+                    }
+
+                    if (state == ColorDone)
+                    {
+                        stack.Pop();
+                        continue;
+                    }
+
+                    // 未訪問（白）。訪問中（灰）にして後続を積む。
+                    color[id] = ColorVisiting;
+
+                    DialogueData row;
+                    if (!byId.TryGetValue(id, out row))
+                        continue;
+
+                    PushSuccessor(stack, color, reported, byId, report, row.NextId);
+                    foreach (var choice in row.GetChoices())
+                        PushSuccessor(stack, color, reported, byId, report, choice.NextId);
+                }
+            }
         }
 
-        private static void Visit(int id, Dictionary<int, DialogueData> byId, HashSet<int> visiting, HashSet<int> visited, DialogueValidationReport report)
+        private static void PushSuccessor(Stack<int> stack, Dictionary<int, int> color, HashSet<int> reported,
+            Dictionary<int, DialogueData> byId, DialogueValidationReport report, int nextId)
         {
-            if (visited.Contains(id)) return;
-            if (visiting.Contains(id))
+            if (nextId < 0) return;
+
+            int nextColor;
+            color.TryGetValue(nextId, out nextColor);
+
+            if (nextColor == ColorVisiting)
             {
-                DialogueData cycleRow;
-                if (byId.TryGetValue(id, out cycleRow))
-                    report.Add(DialogueValidationSeverity.Info, cycleRow.RowNumber, DialogueSchema.NextId, "Cycle detected. Cycles are allowed but should be intentional.");
+                // 訪問中ノードへの後退辺 = 循環。ノードごとに一度だけ報告する。
+                if (reported.Add(nextId))
+                {
+                    DialogueData cycleRow;
+                    if (byId.TryGetValue(nextId, out cycleRow))
+                        report.Add(DialogueValidationSeverity.Info, cycleRow.RowNumber, DialogueSchema.NextId, "Cycle detected. Cycles are allowed but should be intentional.");
+                }
+
                 return;
             }
 
-            DialogueData row;
-            if (!byId.TryGetValue(id, out row)) return;
-
-            visiting.Add(id);
-            if (row.NextId >= 0)
-                Visit(row.NextId, byId, visiting, visited, report);
-
-            foreach (var choice in row.GetChoices())
-                if (choice.NextId >= 0)
-                    Visit(choice.NextId, byId, visiting, visited, report);
-
-            visiting.Remove(id);
-            visited.Add(id);
+            if (nextColor == 0)
+                stack.Push(nextId);
         }
 
         public static DialogueValidationReport ValidateCharacters(IEnumerable<DialogueData> data, CharacterExpressionDatabase database)
