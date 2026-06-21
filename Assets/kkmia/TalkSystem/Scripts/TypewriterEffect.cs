@@ -61,7 +61,7 @@ namespace kkmia.TalkSystem
                 _typingCoroutine = null;
 
                 if (_textComponent != null)
-                    _textComponent.text = _fullText;
+                    _textComponent.maxVisibleCharacters = int.MaxValue;
 
                 _onComplete?.Invoke();
             }
@@ -98,14 +98,22 @@ namespace kkmia.TalkSystem
 
         private IEnumerator TypeRoutine()
         {
-            _textComponent.text = string.Empty;
+            // 全文を一度だけ設定し、maxVisibleCharacters で表示文字数を制御する。
+            // 文字列の再確保が発生せず、リッチテキストタグ（<color> など）も
+            // 1文字ずつ露出しない（タグは可視文字数にカウントされないため）。
+            _textComponent.text = _fullText;
+            _textComponent.maxVisibleCharacters = 0;
+            _textComponent.ForceMeshUpdate();
 
-            foreach (var c in _fullText)
+            var totalCharacters = _textComponent.textInfo.characterCount;
+
+            for (var visible = 1; visible <= totalCharacters; visible++)
             {
-                _textComponent.text += c;
+                _textComponent.maxVisibleCharacters = visible;
                 yield return new WaitForSeconds(interval);
             }
 
+            _textComponent.maxVisibleCharacters = int.MaxValue;
             _typingCoroutine = null;
             _onComplete?.Invoke();
         }
