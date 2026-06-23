@@ -57,6 +57,8 @@ namespace kkmia.TalkSystem
 
         private Sprite initialSprite;
         private Coroutine autoNextCoroutine;
+        private bool _autoOverrideActive;
+        private float _autoOverrideSeconds;
         private readonly List<Button> _choiceButtons = new List<Button>();
         private IReadOnlyList<DialogueChoice> _activeChoices = new List<DialogueChoice>();
 
@@ -240,11 +242,27 @@ namespace kkmia.TalkSystem
                 OnNextRequested();
         }
 
+        /// <summary>
+        /// オート/スキップ進行のための外部オーバーライド。active の間は、選択肢が無い限り
+        /// 行表示後に必ず <paramref name="seconds"/> 後の自動送りを行う（行データの AutoNextSeconds を無視）。
+        /// </summary>
+        public void SetAutoAdvanceOverride(bool active, float seconds)
+        {
+            _autoOverrideActive = active;
+            _autoOverrideSeconds = seconds < 0f ? 0f : seconds;
+        }
+
         private void StartAutoNextTimer(DialogueData data)
         {
             CancelAutoNextTimer();
             if (_activeChoices != null && _activeChoices.Count > 0)
                 return;
+
+            if (_autoOverrideActive)
+            {
+                autoNextCoroutine = StartCoroutine(AutoNextCoroutine(_autoOverrideSeconds));
+                return;
+            }
 
             var seconds = data != null && data.AutoNextSeconds >= 0f ? data.AutoNextSeconds : defaultAutoNextSeconds;
             if (!enableAutoNext && (data == null || data.AutoNextSeconds < 0f))
