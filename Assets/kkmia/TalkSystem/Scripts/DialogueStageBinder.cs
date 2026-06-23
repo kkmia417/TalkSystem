@@ -8,8 +8,10 @@ namespace kkmia.TalkSystem
     /// <see cref="DialogueViewBinder"/> と同様、シーンに置くだけで自動配線される。
     /// </summary>
     [RequireComponent(typeof(DialogueStageView))]
-    public class DialogueStageBinder : MonoBehaviour
+    public class DialogueStageBinder : MonoBehaviour, IDialogueSaveContributor
     {
+        private const string StageKey = "stage";
+
         [Tooltip("会話終了時にステージ（背景・立ち絵）も消去するか。")]
         [SerializeField] private bool clearStageOnDialogueEnd = true;
 
@@ -67,6 +69,26 @@ namespace kkmia.TalkSystem
         {
             if (clearStageOnDialogueEnd)
                 _director.Clear();
+        }
+
+        // --- IDialogueSaveContributor（セーブの完全復元）---
+
+        void IDialogueSaveContributor.Capture(DialogueSaveData data)
+        {
+            if (data == null || _director == null) return;
+            data.SetExtra(StageKey, JsonUtility.ToJson(_director.CaptureSnapshot()));
+        }
+
+        void IDialogueSaveContributor.Restore(DialogueSaveData data)
+        {
+            if (data == null || _director == null) return;
+
+            string json;
+            if (!data.TryGetExtra(StageKey, out json) || string.IsNullOrEmpty(json))
+                return;
+
+            var snapshot = JsonUtility.FromJson<DialogueStageSnapshot>(json);
+            _director.RestoreSnapshot(snapshot);
         }
     }
 }

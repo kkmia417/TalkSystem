@@ -55,6 +55,8 @@ namespace kkmia.TalkSystem
     {
         // slot -> characterKey。挿入順を保つため List ではなく Dictionary + 補助探索を使う。
         private readonly Dictionary<string, string> _occupancy = new Dictionary<string, string>();
+        // slot -> 現在の表情。セーブの完全復元のために占有と並行して保持する。
+        private readonly Dictionary<string, string> _expressions = new Dictionary<string, string>();
         private readonly string _defaultSlot;
 
         public DialogueStageState(string defaultSlot = DialogueStageSlot.Center)
@@ -71,6 +73,37 @@ namespace kkmia.TalkSystem
         public void Reset()
         {
             _occupancy.Clear();
+            _expressions.Clear();
+        }
+
+        /// <summary>現在のステージ占有をスナップショット化する（セーブ用）。</summary>
+        public List<DialogueStageCharacterSnapshot> Snapshot()
+        {
+            var result = new List<DialogueStageCharacterSnapshot>();
+            foreach (var pair in _occupancy)
+            {
+                string expression;
+                _expressions.TryGetValue(pair.Key, out expression);
+                result.Add(new DialogueStageCharacterSnapshot(pair.Key, pair.Value, expression ?? string.Empty));
+            }
+
+            return result;
+        }
+
+        /// <summary>スナップショットから占有状態を再構築する（操作列は発行しない）。</summary>
+        public void RestoreSnapshot(IEnumerable<DialogueStageCharacterSnapshot> snapshot)
+        {
+            Reset();
+            if (snapshot == null) return;
+
+            foreach (var entry in snapshot)
+            {
+                if (string.IsNullOrEmpty(entry.slot) || string.IsNullOrEmpty(entry.characterKey))
+                    continue;
+
+                _occupancy[entry.slot] = entry.characterKey;
+                _expressions[entry.slot] = entry.expression ?? string.Empty;
+            }
         }
 
         /// <summary>
@@ -88,6 +121,7 @@ namespace kkmia.TalkSystem
                 if (directive.IsClearAll)
                 {
                     _occupancy.Clear();
+                    _expressions.Clear();
                     operations.Add(DialogueStageOperation.ClearAll());
                     continue;
                 }
@@ -96,7 +130,10 @@ namespace kkmia.TalkSystem
                 {
                     var slot = directive.HasSlot ? directive.Slot : FindSlotOf(directive.CharacterKey);
                     if (!string.IsNullOrEmpty(slot))
+                    {
                         _occupancy.Remove(slot);
+                        _expressions.Remove(slot);
+                    }
 
                     operations.Add(DialogueStageOperation.Hide(slot, directive.CharacterKey, directive.Animation));
                     continue;
@@ -117,12 +154,21 @@ namespace kkmia.TalkSystem
             if (string.IsNullOrEmpty(slot))
                 slot = _defaultSlot;
 
-            // 同じキャラが別スロットから移動する場合は元スロットを空ける。
+            // 同じキャラが別スロットから移動する場合は元スロットを空け、表情を引き継ぐ。
             var previousSlot = FindSlotOf(directive.CharacterKey);
+            string carriedExpression = null;
+            if (!string.IsNullOrEmpty(previousSlot))
+                _expressions.TryGetValue(previousSlot, out carriedExpression);
+
             if (!string.IsNullOrEmpty(previousSlot) && previousSlot != slot)
+            {
                 _occupancy.Remove(previousSlot);
+                _expressions.Remove(previousSlot);
+            }
 
             _occupancy[slot] = directive.CharacterKey;
+            // 表情未指定の再表示では直前の表情を維持する。
+            _expressions[slot] = directive.HasExpression ? directive.Expression : (carriedExpression ?? string.Empty);
             return DialogueStageOperation.Show(slot, directive.CharacterKey, directive.Expression, directive.Animation);
         }
 

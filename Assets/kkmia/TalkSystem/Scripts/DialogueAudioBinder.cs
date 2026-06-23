@@ -8,8 +8,10 @@ namespace kkmia.TalkSystem
     /// <see cref="DialogueViewBinder"/> / <see cref="DialogueStageBinder"/> と同様、置くだけで自動配線される。
     /// </summary>
     [RequireComponent(typeof(DialogueAudioPlayer))]
-    public class DialogueAudioBinder : MonoBehaviour
+    public class DialogueAudioBinder : MonoBehaviour, IDialogueSaveContributor
     {
+        private const string BgmKey = "audio.bgm";
+
         [Tooltip("会話終了時に BGM も停止するか（false ならボイスのみ停止）。")]
         [SerializeField] private bool stopBgmOnDialogueEnd = true;
 
@@ -69,6 +71,31 @@ namespace kkmia.TalkSystem
                 _director.StopAll();
             else
                 _player.StopVoice();
+        }
+
+        // --- IDialogueSaveContributor（セーブの完全復元）---
+
+        void IDialogueSaveContributor.Capture(DialogueSaveData data)
+        {
+            if (data == null || _director == null) return;
+            data.SetExtra(BgmKey, _director.CurrentBgmKey);
+        }
+
+        void IDialogueSaveContributor.Restore(DialogueSaveData data)
+        {
+            if (data == null || _player == null) return;
+
+            string key;
+            if (!data.TryGetExtra(BgmKey, out key))
+                return;
+
+            if (string.IsNullOrEmpty(key))
+                _player.PlayBgm(string.Empty, true, string.Empty, 0f);
+            else
+                _player.PlayBgm(key, false, string.Empty, 0f);
+
+            if (_director != null)
+                _director.SetCurrentBgmKey(key);
         }
     }
 }

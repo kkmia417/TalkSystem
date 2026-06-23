@@ -17,6 +17,15 @@ namespace kkmia.TalkSystem
             _player = player ?? throw new ArgumentNullException(nameof(player));
         }
 
+        /// <summary>現在再生中の BGM キー（停止中は空）。セーブの完全復元で参照する。</summary>
+        public string CurrentBgmKey { get; private set; } = string.Empty;
+
+        /// <summary>復元時など、再生状態を外部から設定した際に現在 BGM キーを更新する。</summary>
+        public void SetCurrentBgmKey(string key)
+        {
+            CurrentBgmKey = key ?? string.Empty;
+        }
+
         /// <summary>この行の BGM・SE・ボイスを再生する。</summary>
         public void Apply(DialogueData data)
         {
@@ -30,6 +39,7 @@ namespace kkmia.TalkSystem
         /// <summary>会話終了時などに全ての音声を停止する。</summary>
         public void StopAll()
         {
+            CurrentBgmKey = string.Empty;
             _player.StopAll();
         }
 
@@ -37,6 +47,8 @@ namespace kkmia.TalkSystem
         {
             var cue = data.GetBgmCue();
             if (!cue.HasValue) return;
+
+            CurrentBgmKey = cue.IsClear ? string.Empty : cue.Key;
 
             var duration = cue.HasDuration ? Math.Max(0f, cue.Duration) : 0f;
             _player.PlayBgm(cue.Key, cue.IsClear, cue.Transition, duration);

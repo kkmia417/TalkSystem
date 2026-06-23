@@ -12,6 +12,7 @@ namespace kkmia.TalkSystem
     {
         private readonly IDialogueStageView _view;
         private readonly DialogueStageState _state;
+        private string _currentBackgroundKey = string.Empty;
 
         public DialogueStageDirector(IDialogueStageView view, DialogueStageState state = null)
         {
@@ -39,13 +40,58 @@ namespace kkmia.TalkSystem
             _state.Reset();
             _view.ClearCharacters();
             if (clearBackground)
+            {
+                _currentBackgroundKey = string.Empty;
                 _view.SetBackground(string.Empty, true, string.Empty, 0f);
+            }
+        }
+
+        /// <summary>現在のステージ状態（背景・立ち絵）をスナップショット化する。</summary>
+        public DialogueStageSnapshot CaptureSnapshot()
+        {
+            return new DialogueStageSnapshot
+            {
+                backgroundKey = _currentBackgroundKey,
+                characters = _state.Snapshot()
+            };
+        }
+
+        /// <summary>スナップショットからステージを即時復元する（トランジション無し）。</summary>
+        public void RestoreSnapshot(DialogueStageSnapshot snapshot)
+        {
+            _state.Reset();
+            _view.ClearCharacters();
+
+            if (snapshot == null)
+            {
+                _currentBackgroundKey = string.Empty;
+                _view.SetBackground(string.Empty, true, string.Empty, 0f);
+                return;
+            }
+
+            _currentBackgroundKey = snapshot.backgroundKey ?? string.Empty;
+            if (string.IsNullOrEmpty(_currentBackgroundKey))
+                _view.SetBackground(string.Empty, true, string.Empty, 0f);
+            else
+                _view.SetBackground(_currentBackgroundKey, false, string.Empty, 0f);
+
+            _state.RestoreSnapshot(snapshot.characters);
+            if (snapshot.characters != null)
+            {
+                for (var i = 0; i < snapshot.characters.Count; i++)
+                {
+                    var c = snapshot.characters[i];
+                    _view.SetCharacter(c.slot, c.characterKey, c.expression, null);
+                }
+            }
         }
 
         private void ApplyBackground(DialogueData data)
         {
             var cue = data.GetBackgroundCue();
             if (!cue.HasValue) return;
+
+            _currentBackgroundKey = cue.IsClear ? string.Empty : cue.Key;
 
             var duration = cue.HasDuration ? Math.Max(0f, cue.Duration) : 0f;
             _view.SetBackground(cue.Key, cue.IsClear, cue.Transition, duration);
