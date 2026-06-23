@@ -33,11 +33,30 @@ namespace kkmia.TalkSystem
         [Header("Character Slots")]
         [SerializeField] private List<DialogueStageSlotBinding> slots = new List<DialogueStageSlotBinding>();
 
+        [Header("Character Backend (任意)")]
+        [Tooltip("IDialogueCharacterBackend を実装したコンポーネント（Live2D/Spine/モデル）。設定時は立ち絵描画をここへ委譲する。")]
+        [SerializeField] private MonoBehaviour characterBackend;
+
+        private IDialogueCharacterBackend _backend;
+
         [Header("Transitions")]
         [Tooltip("トランジション秒数が未指定（0）でフェード系が指定されたときに使う既定の長さ。")]
         [SerializeField] private float defaultFadeDuration = 0.25f;
 
         private readonly Dictionary<Image, Coroutine> _fades = new Dictionary<Image, Coroutine>();
+
+        private void Awake()
+        {
+            _backend = characterBackend as IDialogueCharacterBackend;
+            if (characterBackend != null && _backend == null)
+                Debug.LogWarning("[DialogueStageView] characterBackend が IDialogueCharacterBackend を実装していません。");
+        }
+
+        /// <summary>立ち絵バックエンドを実行時に差し替える（Live2D/Spine など）。</summary>
+        public void SetCharacterBackend(IDialogueCharacterBackend backend)
+        {
+            _backend = backend;
+        }
 
         public void SetBackground(string backgroundKey, bool clear, string transition, float duration)
         {
@@ -68,6 +87,12 @@ namespace kkmia.TalkSystem
 
         public void SetCharacter(string slot, string characterKey, string expression, string animation)
         {
+            if (_backend != null)
+            {
+                _backend.SetCharacter(slot, characterKey, expression, animation);
+                return;
+            }
+
             var image = FindSlotImage(slot);
             if (image == null)
             {
@@ -91,6 +116,12 @@ namespace kkmia.TalkSystem
 
         public void RemoveCharacter(string slot, string characterKey, string animation)
         {
+            if (_backend != null)
+            {
+                _backend.RemoveCharacter(slot, characterKey, animation);
+                return;
+            }
+
             var image = FindSlotImage(slot);
             if (image == null) return;
 
@@ -102,6 +133,12 @@ namespace kkmia.TalkSystem
 
         public void ClearCharacters()
         {
+            if (_backend != null)
+            {
+                _backend.ClearCharacters();
+                return;
+            }
+
             for (var i = 0; i < slots.Count; i++)
             {
                 var binding = slots[i];
