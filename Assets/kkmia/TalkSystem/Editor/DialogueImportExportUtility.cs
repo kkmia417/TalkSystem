@@ -26,6 +26,11 @@ namespace kkmia.TalkSystem.Editor
         public string eventKey;
         public string choices;
         public float autoNextSeconds = -1f;
+        public string background;
+        public string bgm;
+        public string se;
+        public string voice;
+        public string characters;
     }
 
     public static class DialogueImportExportUtility
@@ -46,7 +51,12 @@ namespace kkmia.TalkSystem.Editor
                     conditionKey = row.ConditionKey,
                     eventKey = row.EventKey,
                     choices = row.ChoicesRaw,
-                    autoNextSeconds = row.AutoNextSeconds
+                    autoNextSeconds = row.AutoNextSeconds,
+                    background = row.Background,
+                    bgm = row.Bgm,
+                    se = row.Se,
+                    voice = row.Voice,
+                    characters = row.CharactersRaw
                 });
             }
 
@@ -60,7 +70,7 @@ namespace kkmia.TalkSystem.Editor
                 ? database.rows.OrderBy(r => r.id).Select(ToCsvRow)
                 : Enumerable.Empty<IReadOnlyList<string>>();
 
-            return DialogueCsvCodec.Write(DialogueSchema.ExtendedHeaders, rows);
+            return DialogueCsvCodec.Write(DialogueSchema.FullHeaders, rows);
         }
 
         public static string YarnLikeToCsv(string scriptText)
@@ -142,7 +152,12 @@ namespace kkmia.TalkSystem.Editor
                 row.conditionKey ?? string.Empty,
                 row.eventKey ?? string.Empty,
                 row.choices ?? string.Empty,
-                row.autoNextSeconds >= 0f ? row.autoNextSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty
+                row.autoNextSeconds >= 0f ? row.autoNextSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty,
+                row.background ?? string.Empty,
+                row.bgm ?? string.Empty,
+                row.se ?? string.Empty,
+                row.voice ?? string.Empty,
+                row.characters ?? string.Empty
             };
         }
 

@@ -76,6 +76,8 @@ namespace kkmia.TalkSystem
                 }
 
                 ValidateChoiceSyntax(row, report);
+                ValidateStageSyntax(row, report);
+                ValidateMediaSyntax(row, report);
             }
 
             foreach (var row in rows)
@@ -110,6 +112,46 @@ namespace kkmia.TalkSystem
                     report.Add(DialogueValidationSeverity.Warning, row.RowNumber, DialogueSchema.Choices,
                         "Choice entry could not be parsed and was ignored: \"" + entry.Trim() + "\".");
             }
+        }
+
+        private static void ValidateStageSyntax(DialogueData row, DialogueValidationReport report)
+        {
+            if (string.IsNullOrWhiteSpace(row.CharactersRaw))
+                return;
+
+            foreach (var entry in row.CharactersRaw.Split('|'))
+            {
+                if (string.IsNullOrWhiteSpace(entry))
+                    continue;
+
+                DialogueStageDirective parsed;
+                if (!DialogueStageDirective.TryParseEntry(entry, out parsed))
+                    report.Add(DialogueValidationSeverity.Warning, row.RowNumber, DialogueSchema.Characters,
+                        "Character directive could not be parsed and was ignored: \"" + entry.Trim() + "\".");
+            }
+        }
+
+        private static void ValidateMediaSyntax(DialogueData row, DialogueValidationReport report)
+        {
+            ValidateMediaCell(row.Background, DialogueSchema.Background, row.RowNumber, report);
+            ValidateMediaCell(row.Bgm, DialogueSchema.Bgm, row.RowNumber, report);
+        }
+
+        private static void ValidateMediaCell(string raw, string field, int rowNumber, DialogueValidationReport report)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return;
+
+            bool durationMalformed;
+            var cue = DialogueMediaCue.Parse(raw, out durationMalformed);
+
+            if (durationMalformed)
+                report.Add(DialogueValidationSeverity.Warning, rowNumber, field,
+                    "Transition duration is not a number and was ignored: \"" + raw.Trim() + "\".");
+
+            if (cue.HasDuration && cue.Duration < 0f)
+                report.Add(DialogueValidationSeverity.Warning, rowNumber, field,
+                    "Transition duration must not be negative: \"" + raw.Trim() + "\".");
         }
 
         private static void ValidateReachability(List<DialogueData> rows, Dictionary<int, DialogueData> byId, DialogueValidationReport report, IEnumerable<int> entryIds)
@@ -238,9 +280,34 @@ namespace kkmia.TalkSystem
                 Sprite sprite;
                 if (!string.IsNullOrEmpty(row.EmotionKey) && !character.TryGetSprite(row.EmotionKey, out sprite))
                     report.Add(DialogueValidationSeverity.Warning, row.RowNumber, DialogueSchema.EmotionKey, "EmotionKey is not found in the character expression database.");
+
+                ValidateStageDirectiveCharacters(row, database, report);
             }
 
             return report;
+        }
+
+        private static void ValidateStageDirectiveCharacters(DialogueData row, CharacterExpressionDatabase database, DialogueValidationReport report)
+        {
+            foreach (var directive in row.GetStageDirectives())
+            {
+                // クリア/退場はキャラクターの実在を要求しない（既にステージから外す指示のため）。
+                if (directive.IsClearAll || directive.IsExit)
+                    continue;
+
+                CharacterDefinition character;
+                if (!database.TryGetCharacter(directive.CharacterKey, out character))
+                {
+                    report.Add(DialogueValidationSeverity.Warning, row.RowNumber, DialogueSchema.Characters,
+                        "Character \"" + directive.CharacterKey + "\" is not found in the character expression database.");
+                    continue;
+                }
+
+                Sprite sprite;
+                if (directive.HasExpression && !character.TryGetSprite(directive.Expression, out sprite))
+                    report.Add(DialogueValidationSeverity.Warning, row.RowNumber, DialogueSchema.Characters,
+                        "Expression \"" + directive.Expression + "\" for \"" + directive.CharacterKey + "\" is not found in the character expression database.");
+            }
         }
     }
 }

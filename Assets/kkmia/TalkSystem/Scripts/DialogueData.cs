@@ -18,6 +18,13 @@ namespace kkmia.TalkSystem
         [field: SerializeField] public string ChoicesRaw { get; internal set; }
         [field: SerializeField] public float AutoNextSeconds { get; internal set; } = -1f;
 
+        // 演出（ステージ）列。すべて任意。詳細な解釈は演出層に委ね、ここでは生値と解析アクセサのみを提供する。
+        [field: SerializeField] public string Background { get; internal set; }
+        [field: SerializeField] public string Bgm { get; internal set; }
+        [field: SerializeField] public string Se { get; internal set; }
+        [field: SerializeField] public string Voice { get; internal set; }
+        [field: SerializeField] public string CharactersRaw { get; internal set; }
+
         public int RowNumber { get; internal set; }
 
         public bool HasTriggerKey
@@ -35,9 +42,65 @@ namespace kkmia.TalkSystem
             get { return !string.IsNullOrEmpty(EventKey); }
         }
 
+        public bool HasBackground
+        {
+            get { return !string.IsNullOrEmpty(Background); }
+        }
+
+        public bool HasBgm
+        {
+            get { return !string.IsNullOrEmpty(Bgm); }
+        }
+
+        public bool HasSe
+        {
+            get { return !string.IsNullOrEmpty(Se); }
+        }
+
+        public bool HasVoice
+        {
+            get { return !string.IsNullOrEmpty(Voice); }
+        }
+
+        public bool HasCharacters
+        {
+            get { return !string.IsNullOrEmpty(CharactersRaw); }
+        }
+
         public IReadOnlyList<DialogueChoice> GetChoices()
         {
             return DialogueChoice.ParseList(ChoicesRaw);
+        }
+
+        public DialogueMediaCue GetBackgroundCue()
+        {
+            return DialogueMediaCue.Parse(Background);
+        }
+
+        public DialogueMediaCue GetBgmCue()
+        {
+            return DialogueMediaCue.Parse(Bgm);
+        }
+
+        /// <summary>Se 列を <c>|</c> 区切りで分解した効果音キー列。空要素は除外する。</summary>
+        public IReadOnlyList<string> GetSeKeys()
+        {
+            var result = new List<string>();
+            if (string.IsNullOrWhiteSpace(Se)) return result;
+
+            foreach (var entry in Se.Split('|'))
+            {
+                var key = entry.Trim();
+                if (key.Length > 0)
+                    result.Add(key);
+            }
+
+            return result;
+        }
+
+        public IReadOnlyList<DialogueStageDirective> GetStageDirectives()
+        {
+            return DialogueStageDirective.ParseList(CharactersRaw);
         }
 
         public DialogueData WithResolvedText(string resolvedText)
@@ -54,6 +117,11 @@ namespace kkmia.TalkSystem
                 EventKey = EventKey,
                 ChoicesRaw = ChoicesRaw,
                 AutoNextSeconds = AutoNextSeconds,
+                Background = Background,
+                Bgm = Bgm,
+                Se = Se,
+                Voice = Voice,
+                CharactersRaw = CharactersRaw,
                 RowNumber = RowNumber
             };
         }

@@ -16,6 +16,13 @@ namespace kkmia.TalkSystem
         public const string Choices = "Choices";
         public const string AutoNextSeconds = "AutoNextSeconds";
 
+        // 演出（ステージ）列。すべて任意で、既存CSVとの後方互換を保つためヘッダー名で読み込む。
+        public const string Background = "Background";
+        public const string Bgm = "Bgm";
+        public const string Se = "Se";
+        public const string Voice = "Voice";
+        public const string Characters = "Characters";
+
         public static readonly string[] DefaultHeaders =
         {
             Id,
@@ -39,6 +46,36 @@ namespace kkmia.TalkSystem
             EventKey,
             Choices,
             AutoNextSeconds
+        };
+
+        // 演出列のみ。ExtendedHeaders に追記して FullHeaders を構成する。
+        public static readonly string[] PresentationHeaders =
+        {
+            Background,
+            Bgm,
+            Se,
+            Voice,
+            Characters
+        };
+
+        // 対話＋演出をすべて含む書き出し用ヘッダー。エディタ/インポートの round-trip はこれを使う。
+        public static readonly string[] FullHeaders =
+        {
+            Id,
+            Speaker,
+            Text,
+            NextId,
+            EmotionKey,
+            TriggerKey,
+            ConditionKey,
+            EventKey,
+            Choices,
+            AutoNextSeconds,
+            Background,
+            Bgm,
+            Se,
+            Voice,
+            Characters
         };
 
         public static Dictionary<string, int> BuildHeaderMap(IReadOnlyList<string> headers)

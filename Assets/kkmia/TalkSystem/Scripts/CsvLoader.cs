@@ -80,7 +80,12 @@ namespace kkmia.TalkSystem
                         ConditionKey = Get(values, map, DialogueSchema.ConditionKey, 6),
                         EventKey = Get(values, map, DialogueSchema.EventKey, -1),
                         ChoicesRaw = Get(values, map, DialogueSchema.Choices, -1),
-                        AutoNextSeconds = ParseFloat(values, map, DialogueSchema.AutoNextSeconds, -1, -1f)
+                        AutoNextSeconds = ParseFloat(values, map, DialogueSchema.AutoNextSeconds, -1, -1f),
+                        Background = Get(values, map, DialogueSchema.Background, -1),
+                        Bgm = Get(values, map, DialogueSchema.Bgm, -1),
+                        Se = Get(values, map, DialogueSchema.Se, -1),
+                        Voice = Get(values, map, DialogueSchema.Voice, -1),
+                        CharactersRaw = Get(values, map, DialogueSchema.Characters, -1)
                     };
 
                     result.Add(data);

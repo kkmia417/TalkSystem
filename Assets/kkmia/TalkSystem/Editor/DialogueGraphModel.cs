@@ -18,6 +18,11 @@ namespace kkmia.TalkSystem.Editor
         public string eventKey = string.Empty;
         public string choicesRaw = string.Empty;
         public float autoNextSeconds = -1f;
+        public string background = string.Empty;
+        public string bgm = string.Empty;
+        public string se = string.Empty;
+        public string voice = string.Empty;
+        public string charactersRaw = string.Empty;
         public Rect rect;
 
         public IReadOnlyList<DialogueChoice> Choices
@@ -108,6 +113,11 @@ namespace kkmia.TalkSystem.Editor
                     eventKey = item.EventKey,
                     choicesRaw = item.ChoicesRaw,
                     autoNextSeconds = item.AutoNextSeconds,
+                    background = item.Background,
+                    bgm = item.Bgm,
+                    se = item.Se,
+                    voice = item.Voice,
+                    charactersRaw = item.CharactersRaw,
                     rect = new Rect(40 + (index % 4) * 300, 40 + (index / 4) * 230, 260, 170)
                 });
                 index++;
@@ -151,10 +161,15 @@ namespace kkmia.TalkSystem.Editor
                     n.conditionKey ?? string.Empty,
                     n.eventKey ?? string.Empty,
                     n.choicesRaw ?? string.Empty,
-                    n.autoNextSeconds >= 0f ? n.autoNextSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty
+                    n.autoNextSeconds >= 0f ? n.autoNextSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty,
+                    n.background ?? string.Empty,
+                    n.bgm ?? string.Empty,
+                    n.se ?? string.Empty,
+                    n.voice ?? string.Empty,
+                    n.charactersRaw ?? string.Empty
                 });
 
-            return DialogueCsvCodec.Write(DialogueSchema.ExtendedHeaders, rows);
+            return DialogueCsvCodec.Write(DialogueSchema.FullHeaders, rows);
         }
     }
 }
