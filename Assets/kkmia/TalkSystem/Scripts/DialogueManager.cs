@@ -210,6 +210,27 @@ namespace kkmia.TalkSystem
             view.gameObject.SetActive(false);
         }
 
+        /// <summary>タイプライターの 1 文字あたり間隔（秒）を設定する。コンフィグの文字速度から呼ぶ。</summary>
+        public void SetTypewriterSpeed(float interval)
+        {
+            if (view != null)
+                view.SetTypewriterSpeed(interval);
+        }
+
+        /// <summary>オート/スキップ進行のための自動送りオーバーライドを設定する。</summary>
+        public void SetAutoAdvanceOverride(bool active, float seconds)
+        {
+            if (view != null)
+                view.SetAutoAdvanceOverride(active, seconds);
+        }
+
+        /// <summary>現在行の送り（または文字送り完了）を要求する。オート/スキップ進行から呼ぶ。</summary>
+        public void RequestNext()
+        {
+            if (view != null)
+                view.RequestNext();
+        }
+
         public DialogueSaveData CaptureState()
         {
             return _presenter != null ? _presenter.CaptureState() : new DialogueSaveData();
