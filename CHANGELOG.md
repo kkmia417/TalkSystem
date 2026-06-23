@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Pluggable character rendering: `IDialogueCharacterBackend` lets `DialogueStageView` delegate stand-in drawing to Live2D / Spine / prefab models instead of sprites. `DialogueCharacterModel` (Animator + SetActive default) and `ModelDialogueCharacterBackend` (key→model registry with slot anchors) cover the SDK-free path.
+- Model lip-sync: `IDialogueLipSyncTarget` and `DialogueModelLipSyncBinder` route the Phase 3 lip-sync openness to the speaking character's model.
+- Optional Live2D Cubism (`Live2DDialogueCharacterModel`, behind `TALKSYSTEM_LIVE2D`) and Spine (`SpineDialogueCharacterModel`, behind `TALKSYSTEM_SPINE`) adapters; both are excluded from compilation unless their define and SDK are present.
 - Stage presentation runtime: `DialogueStageState` (slot occupancy logic), `DialogueStageDirector` (applies a line's background/character directives), `IDialogueStageView` + `DialogueStageView` (UGUI rendering with fades), `BackgroundDatabase`, and `DialogueStageBinder` (auto-wires to `DialogueManager` events). The director is Unity-independent and unit-tested.
 - Audio runtime: `DialogueAudioDirector` (applies a line's `Bgm`/`Se`/`Voice`), `IDialogueAudioPlayer` + `DialogueAudioPlayer` (BGM with looped fades, multi-shot SE, per-line voice), `AudioDatabase` (categorized BGM/SE/Voice clip lookup), and `DialogueAudioBinder` (auto-wires to `DialogueManager` events). The director is Unity-independent and unit-tested.
 - Lip-sync: `DialogueLipSync` samples the voice `AudioSource` amplitude and drives a 0..1 mouth-openness value (event + optional open/closed sprite swap); signal processing lives in the pure, unit-tested `DialogueLipSyncMath`.
