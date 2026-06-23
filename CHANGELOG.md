@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Stage presentation runtime: `DialogueStageState` (slot occupancy logic), `DialogueStageDirector` (applies a line's background/character directives), `IDialogueStageView` + `DialogueStageView` (UGUI rendering with fades), `BackgroundDatabase`, and `DialogueStageBinder` (auto-wires to `DialogueManager` events). The director is Unity-independent and unit-tested.
+- Audio runtime: `DialogueAudioDirector` (applies a line's `Bgm`/`Se`/`Voice`), `IDialogueAudioPlayer` + `DialogueAudioPlayer` (BGM with looped fades, multi-shot SE, per-line voice), `AudioDatabase` (categorized BGM/SE/Voice clip lookup), and `DialogueAudioBinder` (auto-wires to `DialogueManager` events). The director is Unity-independent and unit-tested.
+- Lip-sync: `DialogueLipSync` samples the voice `AudioSource` amplitude and drives a 0..1 mouth-openness value (event + optional open/closed sprite swap); signal processing lives in the pure, unit-tested `DialogueLipSyncMath`.
 - Player configuration: `DialogueSettings` (volumes, text speed, auto delay, skip-read-only) with change events and a `IDialogueSettingsStore` (PlayerPrefs default), plus a `DialogueConfigView` UGUI binder and `DialogueAudioVolumeBinder` (applies volumes to an AudioMixer in dB).
 - Auto / Skip playback: `DialoguePlaybackPlanner` (pure auto/skip decision, including skip-read-only stop) and `DialoguePlaybackController` (marks read, applies text speed, drives auto/skip via the manager). The planner and settings logic are unit-tested.
 - Persistent read tracking: `DialogueReadRegistry` + `IDialogueReadStore` (PlayerPrefs default) for cross-save read state, distinct from the per-session `DialogueSession.SeenLineIds`.
