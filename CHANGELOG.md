@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Multi-slot save system: `DialogueSaveSystem` (capture/restore via `DialogueManager`), `DialogueSaveService` (pure orchestration), `IDialogueSaveStorage` + `FileDialogueSaveStorage` (JSON slots + PNG thumbnails under `persistentDataPath`), slot metadata (title/timestamp/autosave flag), and PNG thumbnail capture.
+- `DialogueAutosave` writes to a dedicated autosave slot on line start with a configurable throttle.
+- `IDialogueSaveContributor` + `DialogueSaveData.ExtraState` extension point so the stage/audio layers can persist and fully restore their state (background, character slots, current BGM) without coupling the save system to them.
 - Presentation (stage) CSV columns: `Background`, `Bgm`, `Se`, `Voice`, and `Characters`, matched by header name and backward compatible with existing CSVs.
 - `DialogueMediaCue` parsing for `Background`/`Bgm` cells (`key#transition:duration`, plus `stop`/`none`/`hide`/`clear`).
 - `DialogueStageDirective` parsing for the `Characters` column (`Character@slot:expression#animation`, character exit with `-`, full-stage clear with `*`).
