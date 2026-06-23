@@ -127,7 +127,14 @@ namespace kkmia.TalkSystem
             State = saveData.State;
 
             if (saveData.CurrentDialogueId >= 0)
-                return LoadLine(saveData.CurrentDialogueId);
+            {
+                var restoredState = saveData.State;
+                if (!LoadLine(saveData.CurrentDialogueId))
+                    return false;
+
+                State = restoredState;
+                return true;
+            }
 
             CurrentData = null;
             CurrentChoices = new List<DialogueChoice>();

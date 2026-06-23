@@ -12,6 +12,7 @@ namespace kkmia.TalkSystem
         private IDialogueEventDispatcher _eventDispatcher;
         private string _languageKey = string.Empty;
         private bool _disposed;
+        private bool _dialogueEndedRaised;
 
         public DialoguePresenter(IDialogueRepository repository, IDialogueView view)
         {
@@ -89,27 +90,20 @@ namespace kkmia.TalkSystem
         {
             if (_disposed) return;
 
+            _dialogueEndedRaised = false;
             if (!_session.Start(id, triggerKey))
             {
                 RaiseError("Dialogue data was not found for ID " + id + ".");
-                if (_view != null) _view.Clear();
-                RaiseEnded();
+                Finish();
                 return;
             }
 
-            RenderCurrent();
+            RenderCurrent(true, true);
         }
 
         public void End()
         {
-            if (_view != null)
-            {
-                _view.ForceStop();
-                _view.Clear();
-            }
-
-            _session.End();
-            RaiseEnded();
+            Finish();
         }
 
         public void Reset()
@@ -127,10 +121,23 @@ namespace kkmia.TalkSystem
             if (!_session.Restore(saveData))
                 return false;
 
+            _dialogueEndedRaised = _session.State == DialogueSessionState.Ended;
             if (_session.CurrentData != null)
-                RenderCurrent();
+                RenderCurrent(false, false);
 
             return true;
+        }
+
+        public void RefreshView()
+        {
+            if (_session.CurrentData != null)
+            {
+                RenderCurrent(false, false);
+                return;
+            }
+
+            if (_view != null)
+                _view.Clear();
         }
 
         public void Dispose()
@@ -140,7 +147,7 @@ namespace kkmia.TalkSystem
             _disposed = true;
         }
 
-        private void RenderCurrent()
+        private void RenderCurrent(bool runLineStartEffects, bool updateStateOnShowComplete)
         {
             if (_view == null)
             {
@@ -157,16 +164,21 @@ namespace kkmia.TalkSystem
 
             var resolvedText = _textResolver.Resolve(data, _languageKey, _variableResolver);
             var displayData = data.WithResolvedText(resolvedText);
-            _session.MarkTyping();
-            _session.RecordDisplayedLine(displayData);
-            RaiseLineStarted(data);
 
-            if (data.HasEventKey && _eventDispatcher != null)
-                _eventDispatcher.Dispatch(new DialogueEventContext(data, data.EventKey, _session.State));
+            if (runLineStartEffects)
+            {
+                _session.MarkTyping();
+                _session.RecordDisplayedLine(displayData);
+                RaiseLineStarted(data);
+
+                if (data.HasEventKey && _eventDispatcher != null)
+                    _eventDispatcher.Dispatch(new DialogueEventContext(data, data.EventKey, _session.State));
+            }
 
             _view.Show(displayData, _session.CurrentChoices, () =>
             {
-                _session.MarkLineReady();
+                if (updateStateOnShowComplete)
+                    _session.MarkLineReady();
             });
         }
 
@@ -188,9 +200,9 @@ namespace kkmia.TalkSystem
                 RaiseLineCompleted(completed);
 
             if (_session.Advance())
-                RenderCurrent();
+                RenderCurrent(true, true);
             else
-                RaiseEnded();
+                Finish();
         }
 
         private void HandleChoiceSelected(int index)
@@ -200,9 +212,24 @@ namespace kkmia.TalkSystem
                 RaiseLineCompleted(completed);
 
             if (_session.SelectChoice(index))
-                RenderCurrent();
+                RenderCurrent(true, true);
             else
                 End();
+        }
+
+        private void Finish()
+        {
+            if (_dialogueEndedRaised && _session.State == DialogueSessionState.Ended)
+                return;
+
+            if (_view != null)
+            {
+                _view.ForceStop();
+                _view.Clear();
+            }
+
+            _session.End();
+            RaiseEnded();
         }
 
         private void UnbindView()
@@ -227,6 +254,8 @@ namespace kkmia.TalkSystem
 
         private void RaiseEnded()
         {
+            if (_dialogueEndedRaised) return;
+            _dialogueEndedRaised = true;
             var context = new DialogueEventContext(null, string.Empty, _session.State);
             if (DialogueEnded != null) DialogueEnded(context);
         }

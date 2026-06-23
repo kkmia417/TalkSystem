@@ -70,6 +70,29 @@ namespace kkmia.TalkSystem.Tests
             Assert.AreEqual(3, session.CurrentData.Id);
         }
 
+        [Test]
+        public void Session_Restore_PreservesHistoryAndSavedState()
+        {
+            var repo = new DialogueRepository(CsvLoader.ParseText<DialogueData>(
+                "Id,Speaker,Text,NextId\n1,A,Hello,2\n2,A,End,-1\n").Values);
+            var session = new DialogueSession(repo);
+
+            Assert.IsTrue(session.Start(1));
+            session.MarkTyping();
+            session.RecordDisplayedLine(session.CurrentData);
+            session.MarkLineReady();
+            var saveData = session.Capture();
+
+            Assert.IsTrue(session.Advance());
+            Assert.IsFalse(session.Advance());
+
+            Assert.IsTrue(session.Restore(saveData));
+
+            Assert.AreEqual(1, session.CurrentData.Id);
+            Assert.AreEqual(DialogueSessionState.WaitingForInput, session.State);
+            Assert.AreEqual(1, session.History.Count);
+        }
+
         private sealed class BlockKeyConditionEvaluator : IDialogueConditionEvaluator
         {
             private readonly string _blockedKey;

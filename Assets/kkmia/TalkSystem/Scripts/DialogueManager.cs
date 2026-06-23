@@ -130,16 +130,26 @@ namespace kkmia.TalkSystem
                 return;
             }
 
-            DisposePresenter();
-            _presenter = new DialoguePresenter(_repository, view);
-            _presenter.LineStarted += RaiseLineStarted;
-            _presenter.LineCompleted += RaiseLineCompleted;
-            _presenter.DialogueEnded += RaiseDialogueEnded;
-            _presenter.ErrorRaised += RaiseError;
-            ApplyPresenterConfiguration();
-
-            view.Clear();
-            view.gameObject.SetActive(false);
+            if (_presenter == null)
+            {
+                CreatePresenter();
+                view.Clear();
+                view.gameObject.SetActive(false);
+            }
+            else
+            {
+                _presenter.BindView(view);
+                if (_presenter.CurrentData != null && _presenter.State != DialogueSessionState.Ended)
+                {
+                    view.gameObject.SetActive(true);
+                    _presenter.RefreshView();
+                }
+                else
+                {
+                    view.Clear();
+                    view.gameObject.SetActive(false);
+                }
+            }
             Debug.Log("[DialogueManager] View がセットされました。");
         }
 
@@ -154,8 +164,7 @@ namespace kkmia.TalkSystem
             StartCoroutine(loader.Load(repository =>
             {
                 _repository = repository;
-                if (view != null)
-                    SetView(view);
+                RecreatePresenter();
             }, error =>
             {
                 Debug.LogError("DialogueManager: " + error);
@@ -264,6 +273,27 @@ namespace kkmia.TalkSystem
             _presenter.SetEventDispatcher(_eventDispatcher);
         }
 
+        private void CreatePresenter()
+        {
+            _presenter = new DialoguePresenter(_repository, view);
+            _presenter.LineStarted += RaiseLineStarted;
+            _presenter.LineCompleted += RaiseLineCompleted;
+            _presenter.DialogueEnded += RaiseDialogueEnded;
+            _presenter.ErrorRaised += RaiseError;
+            ApplyPresenterConfiguration();
+        }
+
+        private void RecreatePresenter()
+        {
+            DisposePresenter();
+            if (view == null)
+                return;
+
+            CreatePresenter();
+            view.Clear();
+            view.gameObject.SetActive(false);
+        }
+
         private void DisposePresenter()
         {
             if (_presenter == null) return;
@@ -311,6 +341,7 @@ namespace kkmia.TalkSystem
         private void RaiseDialogueEnded(DialogueEventContext context)
         {
             if (DialogueEnded != null) DialogueEnded(context);
+            if (view != null) view.gameObject.SetActive(false);
         }
 
         private void RaiseError(string message)
