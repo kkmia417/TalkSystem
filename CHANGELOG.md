@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Audio runtime: `DialogueAudioDirector` (applies a line's `Bgm`/`Se`/`Voice`), `IDialogueAudioPlayer` + `DialogueAudioPlayer` (BGM with looped fades, multi-shot SE, per-line voice), `AudioDatabase` (categorized BGM/SE/Voice clip lookup), and `DialogueAudioBinder` (auto-wires to `DialogueManager` events). The director is Unity-independent and unit-tested.
+- Lip-sync: `DialogueLipSync` samples the voice `AudioSource` amplitude and drives a 0..1 mouth-openness value (event + optional open/closed sprite swap); signal processing lives in the pure, unit-tested `DialogueLipSyncMath`.
 - Presentation (stage) CSV columns: `Background`, `Bgm`, `Se`, `Voice`, and `Characters`, matched by header name and backward compatible with existing CSVs.
 - `DialogueMediaCue` parsing for `Background`/`Bgm` cells (`key#transition:duration`, plus `stop`/`none`/`hide`/`clear`).
 - `DialogueStageDirective` parsing for the `Characters` column (`Character@slot:expression#animation`, character exit with `-`, full-stage clear with `*`).
