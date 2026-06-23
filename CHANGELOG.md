@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Stage presentation runtime: `DialogueStageState` (slot occupancy logic), `DialogueStageDirector` (applies a line's background/character directives), `IDialogueStageView` + `DialogueStageView` (UGUI rendering with fades), `BackgroundDatabase`, and `DialogueStageBinder` (auto-wires to `DialogueManager` events). The director is Unity-independent and unit-tested.
 - Presentation (stage) CSV columns: `Background`, `Bgm`, `Se`, `Voice`, and `Characters`, matched by header name and backward compatible with existing CSVs.
 - `DialogueMediaCue` parsing for `Background`/`Bgm` cells (`key#transition:duration`, plus `stop`/`none`/`hide`/`clear`).
 - `DialogueStageDirective` parsing for the `Characters` column (`Character@slot:expression#animation`, character exit with `-`, full-stage clear with `*`).
