@@ -11,6 +11,7 @@ namespace kkmia.TalkSystem
         public string EmotionKey;
         public string TriggerKey;
         public string EventKey;
+        public string Voice;
         public int Order;
 
         public DialogueHistoryEntry()
@@ -25,6 +26,7 @@ namespace kkmia.TalkSystem
             EmotionKey = data != null ? data.EmotionKey : string.Empty;
             TriggerKey = data != null ? data.TriggerKey : string.Empty;
             EventKey = data != null ? data.EventKey : string.Empty;
+            Voice = data != null ? data.Voice : string.Empty;
             Order = order;
         }
     }
