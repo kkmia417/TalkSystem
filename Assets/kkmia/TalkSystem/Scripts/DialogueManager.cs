@@ -70,7 +70,9 @@ namespace kkmia.TalkSystem
             }
 
             Instance = this;
-            DontDestroyOnLoad(gameObject);
+            // DontDestroyOnLoad は再生中のみ有効（エディタ/テストからの呼び出しは例外になる）。
+            if (Application.isPlaying)
+                DontDestroyOnLoad(gameObject);
 
             if (csvFile == null)
             {
