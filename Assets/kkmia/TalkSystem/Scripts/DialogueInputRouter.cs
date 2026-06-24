@@ -31,6 +31,8 @@ namespace kkmia.TalkSystem
 
             if (action == DialogueInputAction.Next || action == DialogueInputAction.Confirm)
                 _view.RequestNext();
+            else if (action == DialogueInputAction.Rollback && DialogueManager.Instance != null)
+                DialogueManager.Instance.Rollback();
         }
     }
 }

@@ -11,7 +11,8 @@ namespace kkmia.TalkSystem
         Backlog,
         ChoiceUp,
         ChoiceDown,
-        Confirm
+        Confirm,
+        Rollback
     }
 
     public interface IDialogueInputSource
@@ -24,6 +25,7 @@ namespace kkmia.TalkSystem
         [SerializeField] private KeyCode nextKey = KeyCode.Space;
         [SerializeField] private KeyCode backlogKey = KeyCode.B;
         [SerializeField] private KeyCode skipKey = KeyCode.LeftControl;
+        [SerializeField] private KeyCode rollbackKey = KeyCode.PageUp;
 
         public event Action<DialogueInputAction> InputReceived;
 
@@ -35,6 +37,8 @@ namespace kkmia.TalkSystem
                 Raise(DialogueInputAction.Backlog);
             if (Input.GetKeyDown(skipKey))
                 Raise(DialogueInputAction.Skip);
+            if (Input.GetKeyDown(rollbackKey))
+                Raise(DialogueInputAction.Rollback);
         }
 
         private void Raise(DialogueInputAction action)

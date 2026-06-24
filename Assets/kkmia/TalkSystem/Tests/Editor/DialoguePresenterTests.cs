@@ -112,6 +112,39 @@ namespace kkmia.TalkSystem.Tests
             Assert.AreEqual(2, presenter.CurrentData.Id);
         }
 
+        [Test]
+        public void Presenter_Rollback_ReturnsToPreviousLineWithoutSideEffects()
+        {
+            var repo = new DialogueRepository(CsvLoader.ParseText<DialogueData>(
+                "Id,Speaker,Text,NextId\n1,A,One,2\n2,A,Two,3\n3,A,Three,-1\n").Values);
+            var view = new FakeDialogueView();
+            var presenter = new DialoguePresenter(repo, view);
+
+            var lineStarted = 0;
+            presenter.LineStarted += _ => lineStarted++;
+
+            presenter.Start(1);   // line 1
+            Assert.IsFalse(presenter.CanRollback, "先頭行では戻れない");
+
+            view.RaiseNext();      // -> line 2
+            view.RaiseNext();      // -> line 3
+            Assert.AreEqual(3, presenter.CurrentData.Id);
+            Assert.AreEqual(3, lineStarted);
+            Assert.IsTrue(presenter.CanRollback);
+
+            var historyBefore = presenter.Session.History.Count;
+
+            Assert.IsTrue(presenter.Rollback()); // line 3 -> line 2
+            Assert.AreEqual(2, presenter.CurrentData.Id, "直前の行へ戻る");
+            Assert.AreEqual(2, view.LastShown.Id, "戻った行が再描画される");
+            Assert.AreEqual(3, lineStarted, "ロールバックで LineStarted は再発火しない");
+            Assert.AreEqual(historyBefore - 1, presenter.Session.History.Count, "戻った分だけ履歴が縮む");
+
+            // 戻った後も継続して進める。
+            view.RaiseNext(); // line 2 -> line 3
+            Assert.AreEqual(3, presenter.CurrentData.Id);
+        }
+
         private static DialogueRepository CreateRepository()
         {
             return new DialogueRepository(CsvLoader.ParseText<DialogueData>(
