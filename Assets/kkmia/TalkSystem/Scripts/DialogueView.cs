@@ -90,11 +90,10 @@ namespace kkmia.TalkSystem
 
             _activeChoices = choices ?? new List<DialogueChoice>();
 
-            // 行を表示するたびに OnDisable/OnEnable を一度発火させ、配下の LayoutGroup や
-            // アニメーション等の表示状態を初期化する意図的なリセット。
-            // 直前に ForceStop() でコルーチンを停止済みのため、停止される進行中処理は無い。
-            gameObject.SetActive(false);
-            gameObject.SetActive(true);
+            // Show can be called while the view is still inactive, but it must not
+            // force an OnDisable/OnEnable cycle because binders re-register on enable.
+            if (!gameObject.activeSelf)
+                gameObject.SetActive(true);
 
             if (dialogWindow != null)
                 dialogWindow.gameObject.SetActive(true);

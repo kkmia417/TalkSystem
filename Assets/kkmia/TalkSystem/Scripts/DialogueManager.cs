@@ -144,7 +144,12 @@ namespace kkmia.TalkSystem
 
         public void SetView(DialogueView newView)
         {
-            view = newView ?? throw new ArgumentNullException(nameof(newView));
+            newView = newView ?? throw new ArgumentNullException(nameof(newView));
+
+            if (view == newView && _presenter != null)
+                return;
+
+            view = newView;
 
             if (_repository == null)
             {
