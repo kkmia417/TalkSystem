@@ -15,6 +15,41 @@ CSV-driven dialogue tooling for Unity games. Talk System gives you branching dia
 - Build production flows with choices, conditions, variables, events, save data, backlog/history, and custom views.
 - Install through Unity Package Manager and import samples directly into a project.
 
+## Screenshots & Demo
+
+> 📸 Media capture in progress. These assets are recordings of the live Unity Editor and
+> the running sample, so they are captured by hand — see
+> [Capture Guide](Documentation~/images/CAPTURE_GUIDE.md) for the shot list and steps.
+> When an asset is added, uncomment its block below and flip its status to ✅.
+
+| Asset | Shows | Status |
+| --- | --- | --- |
+| `graph-editor.png` | Graph Editor with the sample dialogue as nodes | ⏳ |
+| `graph-editor-node.png` | Editing a single dialogue node | ⏳ |
+| `validator.png` | Dialogue Validator results | ⏳ |
+| `demo-runtime.gif` | Dialogue playing in-game (typewriter) | ⏳ |
+| `demo-choices.gif` | Choice branching in-game | ⏳ |
+
+<!-- Uncomment each block once the matching file exists in Documentation~/images/
+
+### Graph Editor
+
+![Graph Editor showing the sample dialogue as connected nodes](Documentation~/images/graph-editor.png)
+
+![Editing a single dialogue node](Documentation~/images/graph-editor-node.png)
+
+### Validator
+
+![Dialogue Validator results](Documentation~/images/validator.png)
+
+### Runtime demo
+
+![Dialogue playing in-game with typewriter text](Documentation~/images/demo-runtime.gif)
+
+![Choice branching in-game](Documentation~/images/demo-choices.gif)
+
+-->
+
 ## Installation
 
 Open **Window > Package Manager > Add package from git URL**:
