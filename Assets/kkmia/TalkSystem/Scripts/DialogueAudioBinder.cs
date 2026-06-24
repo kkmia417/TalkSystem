@@ -27,18 +27,24 @@ namespace kkmia.TalkSystem
 
         private void OnEnable()
         {
+            // 起動順に依存しないよう、現在の Instance へ即時接続しつつ
+            // InstanceChanged を購読して Manager 生成・差し替え後も再接続する。
+            DialogueManager.InstanceChanged += OnInstanceChanged;
             Bind(DialogueManager.Instance);
-        }
-
-        private void Start()
-        {
-            if (_boundManager == null)
-                Bind(DialogueManager.Instance);
         }
 
         private void OnDisable()
         {
+            DialogueManager.InstanceChanged -= OnInstanceChanged;
             Unbind();
+        }
+
+        private void OnInstanceChanged(DialogueManager manager)
+        {
+            if (manager != null)
+                Bind(manager);
+            else
+                Unbind();
         }
 
         private void Bind(DialogueManager manager)

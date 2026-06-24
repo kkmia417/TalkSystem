@@ -63,8 +63,12 @@ namespace kkmia.TalkSystem
 
         private void ApplyVoice(DialogueData data)
         {
+            // ボイスは行に紐づく。Voice 欄が空の行に進んだら前行のボイスを停止する。
+            // （BGM と異なり継続をデフォルトにしない。継続が必要なら将来別記法を追加する。）
             if (data.HasVoice)
                 _player.PlayVoice(data.Voice);
+            else
+                _player.StopVoice();
         }
     }
 }

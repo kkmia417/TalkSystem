@@ -95,6 +95,36 @@ namespace kkmia.TalkSystem.Tests
                 "保存時の State が ShowingLine に潰されず維持される");
         }
 
+        [Test]
+        public void Session_StartAgain_ResetsHistorySeenAndChoiceHistory()
+        {
+            var csv = "Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey,EventKey,Choices\n" +
+                      "1,A,Choose,-1,,,,,Left->2|Right->3\n" +
+                      "2,A,Left,-1,,,,,\n" +
+                      "3,A,Right,-1,,,,,\n";
+            var repo = new DialogueRepository(CsvLoader.ParseText<DialogueData>(csv).Values);
+            var session = new DialogueSession(repo);
+
+            // 1 回目の会話: 行を表示・既読化し、選択肢を選ぶ。
+            session.Start(1);
+            session.RecordDisplayedLine(session.CurrentData);
+            session.MarkLineReady();
+            Assert.IsTrue(session.SelectChoice(0)); // 1 -> 2
+            session.RecordDisplayedLine(session.CurrentData);
+
+            Assert.AreEqual(1, session.ChoiceHistory.Count);
+            Assert.AreEqual(2, session.History.Count);
+            Assert.AreEqual(2, session.SeenLineIds.Count);
+
+            // 2 回目の Start で前回会話の状態が残ってはならない。
+            session.Start(1);
+            session.RecordDisplayedLine(session.CurrentData);
+
+            Assert.AreEqual(0, session.ChoiceHistory.Count, "選択履歴は新会話で空から始まる");
+            Assert.AreEqual(1, session.History.Count, "履歴は新会話の表示行だけを含む");
+            CollectionAssert.AreEqual(new[] { 1 }, session.SeenLineIds, "既読は新会話の表示済み行だけ");
+        }
+
         private sealed class BlockKeyConditionEvaluator : IDialogueConditionEvaluator
         {
             private readonly string _blockedKey;

@@ -69,19 +69,32 @@ namespace kkmia.TalkSystem.Tests
 
             director.Apply(BuildRow("stop", string.Empty, string.Empty));
 
-            Assert.AreEqual(1, player.Calls.Count);
-            Assert.AreEqual("bgm:stop::0", player.Calls[0]);
+            // BGM 停止に加え、Voice 欄が空のため行単位ボイス仕様で StopVoice も呼ばれる。
+            CollectionAssert.AreEqual(new[] { "bgm:stop::0", "stopVoice" }, player.Calls);
         }
 
         [Test]
-        public void Director_NoAudioFields_DoesNothing()
+        public void Director_EmptyVoiceLine_StopsVoice()
         {
+            // 行単位ボイス仕様: Voice 欄が空の行に進んだら前行のボイスを停止する。
             var player = new RecordingAudioPlayer();
             var director = new DialogueAudioDirector(player);
 
             director.Apply(BuildRow(string.Empty, string.Empty, string.Empty));
 
-            Assert.IsEmpty(player.Calls);
+            CollectionAssert.AreEqual(new[] { "stopVoice" }, player.Calls);
+        }
+
+        [Test]
+        public void Director_VoiceThenEmptyVoiceLine_StopsPreviousVoice()
+        {
+            var player = new RecordingAudioPlayer();
+            var director = new DialogueAudioDirector(player);
+
+            director.Apply(BuildRow(string.Empty, string.Empty, "line_001"));
+            director.Apply(BuildRow(string.Empty, string.Empty, string.Empty));
+
+            CollectionAssert.AreEqual(new[] { "voice:line_001", "stopVoice" }, player.Calls);
         }
 
         [Test]
