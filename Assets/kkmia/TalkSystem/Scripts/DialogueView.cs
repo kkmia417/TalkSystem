@@ -59,6 +59,7 @@ namespace kkmia.TalkSystem
         private Coroutine autoNextCoroutine;
         private bool _autoOverrideActive;
         private float _autoOverrideSeconds;
+        private Transform _runtimeChoicesContainer;
         private readonly List<Button> _choiceButtons = new List<Button>();
         private IReadOnlyList<DialogueChoice> _activeChoices = new List<DialogueChoice>();
 
@@ -196,13 +197,20 @@ namespace kkmia.TalkSystem
 
         private void DrawChoices()
         {
-            if (_activeChoices == null || _activeChoices.Count == 0 || choicesContainer == null || choiceButtonPrefab == null)
+            if (_activeChoices == null || _activeChoices.Count == 0)
+                return;
+
+            var targetContainer = EnsureChoicesContainer();
+            if (targetContainer == null)
                 return;
 
             for (var i = 0; i < _activeChoices.Count; i++)
             {
                 var index = i;
-                var button = Instantiate(choiceButtonPrefab, choicesContainer);
+                var button = choiceButtonPrefab != null
+                    ? Instantiate(choiceButtonPrefab, targetContainer)
+                    : CreateDefaultChoiceButton(targetContainer);
+
                 var label = button.GetComponentInChildren<TMP_Text>();
                 if (label != null)
                     label.text = _activeChoices[i].Text;
@@ -211,6 +219,74 @@ namespace kkmia.TalkSystem
                 button.gameObject.SetActive(true);
                 _choiceButtons.Add(button);
             }
+        }
+
+        private Transform EnsureChoicesContainer()
+        {
+            if (choicesContainer != null)
+                return choicesContainer;
+
+            if (_runtimeChoicesContainer != null)
+                return _runtimeChoicesContainer;
+
+            var parent = transform as RectTransform;
+            if (parent == null)
+                return null;
+
+            var container = new GameObject("RuntimeChoices", typeof(RectTransform), typeof(VerticalLayoutGroup));
+            container.transform.SetParent(transform, false);
+
+            var rect = (RectTransform)container.transform;
+            rect.anchorMin = new Vector2(0.5f, 0f);
+            rect.anchorMax = new Vector2(0.5f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.anchoredPosition = new Vector2(0f, 190f);
+            rect.sizeDelta = new Vector2(520f, 150f);
+
+            var layout = container.GetComponent<VerticalLayoutGroup>();
+            layout.spacing = 8f;
+            layout.childAlignment = TextAnchor.LowerCenter;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+
+            _runtimeChoicesContainer = container.transform;
+            return _runtimeChoicesContainer;
+        }
+
+        private static Button CreateDefaultChoiceButton(Transform parent)
+        {
+            var buttonObject = new GameObject("ChoiceButton", typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
+            buttonObject.transform.SetParent(parent, false);
+
+            var rect = (RectTransform)buttonObject.transform;
+            rect.sizeDelta = new Vector2(480f, 42f);
+
+            var image = buttonObject.GetComponent<Image>();
+            image.color = new Color(0.12f, 0.14f, 0.18f, 0.92f);
+
+            var layout = buttonObject.GetComponent<LayoutElement>();
+            layout.preferredHeight = 42f;
+            layout.minHeight = 42f;
+
+            var labelObject = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+            labelObject.transform.SetParent(buttonObject.transform, false);
+
+            var labelRect = (RectTransform)labelObject.transform;
+            labelRect.anchorMin = Vector2.zero;
+            labelRect.anchorMax = Vector2.one;
+            labelRect.offsetMin = new Vector2(14f, 4f);
+            labelRect.offsetMax = new Vector2(-14f, -4f);
+
+            var label = labelObject.GetComponent<TextMeshProUGUI>();
+            label.alignment = TextAlignmentOptions.MidlineLeft;
+            label.color = Color.white;
+            label.fontSize = 18f;
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.overflowMode = TextOverflowModes.Ellipsis;
+
+            return buttonObject.GetComponent<Button>();
         }
 
         private void SelectChoice(int index)
