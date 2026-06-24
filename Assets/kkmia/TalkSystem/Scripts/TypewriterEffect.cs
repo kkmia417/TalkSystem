@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 
@@ -19,6 +20,7 @@ namespace kkmia.TalkSystem
         private Coroutine _typingCoroutine;
         private string _fullText;
         private Action _onComplete;
+        private IReadOnlyList<DialogueInlineCommand> _commands;
 
         /// <summary>
         /// 現在タイプ中かどうかを返します。
@@ -37,6 +39,15 @@ namespace kkmia.TalkSystem
         /// <param name="onComplete">表示完了時に呼ばれるコールバック</param>
         public void Play(string fullText, Action onComplete)
         {
+            Play(fullText, null, onComplete);
+        }
+
+        /// <summary>
+        /// インラインタグ解釈済みのテキストを表示する。<paramref name="commands"/> の
+        /// ウェイト/速度コマンドを可視文字位置で適用する。
+        /// </summary>
+        public void Play(string displayText, IReadOnlyList<DialogueInlineCommand> commands, Action onComplete)
+        {
             StopTyping();
 
             if (_textComponent == null)
@@ -45,9 +56,17 @@ namespace kkmia.TalkSystem
                 return;
             }
 
-            _fullText = fullText ?? string.Empty;
+            _fullText = displayText ?? string.Empty;
+            _commands = commands;
             _onComplete = onComplete;
             _typingCoroutine = StartCoroutine(TypeRoutine());
+        }
+
+        /// <summary>インラインタグ付き本文を解析して表示する簡易ヘルパー。</summary>
+        public void PlayInline(string rawText, Action onComplete)
+        {
+            var inline = DialogueInlineText.Build(rawText);
+            Play(inline.DisplayText, inline.Commands, onComplete);
         }
 
         /// <summary>
@@ -106,14 +125,30 @@ namespace kkmia.TalkSystem
             _textComponent.ForceMeshUpdate();
 
             var totalCharacters = _textComponent.textInfo.characterCount;
+            var currentInterval = interval;
+            var commandIndex = 0;
 
-            for (var visible = 1; visible <= totalCharacters; visible++)
+            for (var visible = 0; visible <= totalCharacters; visible++)
             {
+                // この可視位置に紐づくウェイト/速度コマンドを適用する。
+                while (_commands != null && commandIndex < _commands.Count &&
+                       _commands[commandIndex].VisibleCharIndex == visible)
+                {
+                    var command = _commands[commandIndex++];
+                    if (command.Kind == DialogueInlineCommandKind.Speed)
+                        currentInterval = command.Value > 0f ? interval / command.Value : interval;
+                    else if (command.Kind == DialogueInlineCommandKind.Wait && command.Value > 0f)
+                        yield return new WaitForSeconds(command.Value);
+                }
+
                 _textComponent.maxVisibleCharacters = visible;
-                yield return new WaitForSeconds(interval);
+
+                if (visible < totalCharacters)
+                    yield return new WaitForSeconds(currentInterval);
             }
 
             _textComponent.maxVisibleCharacters = int.MaxValue;
+            _commands = null;
             _typingCoroutine = null;
             _onComplete?.Invoke();
         }
