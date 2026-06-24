@@ -6,6 +6,7 @@ namespace kkmia.TalkSystem
     public class DialoguePresenter : IDisposable
     {
         private readonly DialogueSession _session;
+        private readonly DialogueRollbackHistory _rollback = new DialogueRollbackHistory();
         private IDialogueView _view;
         private IDialogueTextResolver _textResolver;
         private IDialogueVariableResolver _variableResolver;
@@ -89,6 +90,9 @@ namespace kkmia.TalkSystem
         {
             if (_disposed) return;
 
+            // 新しい会話を開始したらロールバック履歴も会話単位で初期化する。
+            _rollback.Clear();
+
             if (!_session.Start(id, triggerKey))
             {
                 RaiseError("Dialogue data was not found for ID " + id + ".");
@@ -98,6 +102,32 @@ namespace kkmia.TalkSystem
             }
 
             RenderCurrent();
+        }
+
+        /// <summary>直前の行へ巻き戻せるか。</summary>
+        public bool CanRollback
+        {
+            get { return _rollback.CanRollback; }
+        }
+
+        /// <summary>
+        /// 直前の行へ巻き戻して再開する。表示は <see cref="RenderReason.Restore"/> で再描画するため、
+        /// 履歴の重複追加・LineStarted・イベント再発火は起こらない。戻れない場合は false。
+        /// </summary>
+        public bool Rollback()
+        {
+            if (_disposed) return false;
+
+            var previous = _rollback.Rollback();
+            if (previous == null) return false;
+
+            if (!_session.Restore(previous))
+                return false;
+
+            if (_session.CurrentData != null)
+                RenderCurrent(RenderReason.Restore);
+
+            return true;
         }
 
         public void End()
@@ -189,6 +219,9 @@ namespace kkmia.TalkSystem
 
                 if (data.HasEventKey && _eventDispatcher != null)
                     _eventDispatcher.Dispatch(new DialogueEventContext(data, data.EventKey, _session.State));
+
+                // 巻き戻し用に、この行を表示した時点の状態を積む（復元再描画では積まない）。
+                _rollback.Push(_session.Capture());
             }
 
             _view.Show(displayData, _session.CurrentChoices, () =>

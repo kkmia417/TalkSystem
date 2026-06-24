@@ -281,6 +281,18 @@ namespace kkmia.TalkSystem
                 view.RequestNext();
         }
 
+        /// <summary>直前の行へ巻き戻せるか。</summary>
+        public bool CanRollback
+        {
+            get { return _presenter != null && _presenter.CanRollback; }
+        }
+
+        /// <summary>直前の行へ巻き戻して再開する。戻れない場合は false。</summary>
+        public bool Rollback()
+        {
+            return _presenter != null && _presenter.Rollback();
+        }
+
         public DialogueSaveData CaptureState()
         {
             return _presenter != null ? _presenter.CaptureState() : new DialogueSaveData();
