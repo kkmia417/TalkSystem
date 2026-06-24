@@ -130,17 +130,42 @@ namespace kkmia.TalkSystem
                 return;
             }
 
+            if (_presenter == null)
+            {
+                // Presenter 未生成時のみ新規作成する。
+                CreatePresenter(view);
+                view.Clear();
+                view.gameObject.SetActive(false);
+            }
+            else
+            {
+                // View 差し替えはセッションを維持したまま再バインドする。
+                // 進行中なら現在行を新 View に再描画し、そうでなければ初期表示へ戻す。
+                _presenter.BindView(view);
+                if (_presenter.CurrentData != null)
+                {
+                    view.gameObject.SetActive(true);
+                    _presenter.RedrawCurrent();
+                }
+                else
+                {
+                    view.Clear();
+                    view.gameObject.SetActive(false);
+                }
+            }
+
+            Debug.Log("[DialogueManager] View がセットされました。");
+        }
+
+        private void CreatePresenter(DialogueView targetView)
+        {
             DisposePresenter();
-            _presenter = new DialoguePresenter(_repository, view);
+            _presenter = new DialoguePresenter(_repository, targetView);
             _presenter.LineStarted += RaiseLineStarted;
             _presenter.LineCompleted += RaiseLineCompleted;
             _presenter.DialogueEnded += RaiseDialogueEnded;
             _presenter.ErrorRaised += RaiseError;
             ApplyPresenterConfiguration();
-
-            view.Clear();
-            view.gameObject.SetActive(false);
-            Debug.Log("[DialogueManager] View がセットされました。");
         }
 
         public void LoadRepository(IDialogueRepositoryLoader loader)
@@ -155,7 +180,12 @@ namespace kkmia.TalkSystem
             {
                 _repository = repository;
                 if (view != null)
-                    SetView(view);
+                {
+                    // Repository が差し替わったら新 Repository 用に Presenter を作り直す。
+                    CreatePresenter(view);
+                    view.Clear();
+                    view.gameObject.SetActive(false);
+                }
             }, error =>
             {
                 Debug.LogError("DialogueManager: " + error);
@@ -310,7 +340,11 @@ namespace kkmia.TalkSystem
 
         private void RaiseDialogueEnded(DialogueEventContext context)
         {
+            // 自然終了・明示終了のどちらでも、外部購読者へ通知した後で View を非表示にする。
+            // 終了時の View 状態を参照する購読者のために、通知 → 非表示の順序を固定する。
             if (DialogueEnded != null) DialogueEnded(context);
+            if (view != null)
+                view.gameObject.SetActive(false);
         }
 
         private void RaiseError(string message)
