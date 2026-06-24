@@ -111,12 +111,12 @@ namespace kkmia.TalkSystem
 
             if (typewriter != null)
             {
-                typewriter.Play(data.Text, () => CompleteLine(data, onComplete));
+                typewriter.PlayInline(data.Text, () => CompleteLine(data, onComplete));
             }
             else
             {
                 if (bodyText != null)
-                    bodyText.text = data.Text;
+                    bodyText.text = DialogueInlineText.Build(data.Text).DisplayText;
 
                 CompleteLine(data, onComplete);
             }
