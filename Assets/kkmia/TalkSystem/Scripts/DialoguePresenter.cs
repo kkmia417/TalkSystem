@@ -128,9 +128,19 @@ namespace kkmia.TalkSystem
                 return false;
 
             if (_session.CurrentData != null)
-                RenderCurrent();
+                RenderCurrent(RenderReason.Restore);
 
             return true;
+        }
+
+        /// <summary>
+        /// View を差し替えた後などに、進行中の現在行を新しい View へ再描画する。
+        /// 履歴追加・イベント発火・LineStarted を伴わない表示専用の再描画。
+        /// </summary>
+        public void RedrawCurrent()
+        {
+            if (_session.CurrentData != null)
+                RenderCurrent(RenderReason.Restore);
         }
 
         public void Dispose()
@@ -140,7 +150,20 @@ namespace kkmia.TalkSystem
             _disposed = true;
         }
 
+        private enum RenderReason
+        {
+            // 新規に行を開始する描画。履歴追加・LineStarted・イベント発火を伴う。
+            NewLine,
+            // セーブ復元や View 再バインド時の表示専用の再描画。副作用を伴わない。
+            Restore
+        }
+
         private void RenderCurrent()
+        {
+            RenderCurrent(RenderReason.NewLine);
+        }
+
+        private void RenderCurrent(RenderReason reason)
         {
             if (_view == null)
             {
@@ -157,12 +180,16 @@ namespace kkmia.TalkSystem
 
             var resolvedText = _textResolver.Resolve(data, _languageKey, _variableResolver);
             var displayData = data.WithResolvedText(resolvedText);
-            _session.MarkTyping();
-            _session.RecordDisplayedLine(displayData);
-            RaiseLineStarted(data);
 
-            if (data.HasEventKey && _eventDispatcher != null)
-                _eventDispatcher.Dispatch(new DialogueEventContext(data, data.EventKey, _session.State));
+            if (reason == RenderReason.NewLine)
+            {
+                _session.MarkTyping();
+                _session.RecordDisplayedLine(displayData);
+                RaiseLineStarted(data);
+
+                if (data.HasEventKey && _eventDispatcher != null)
+                    _eventDispatcher.Dispatch(new DialogueEventContext(data, data.EventKey, _session.State));
+            }
 
             _view.Show(displayData, _session.CurrentChoices, () =>
             {
@@ -190,7 +217,7 @@ namespace kkmia.TalkSystem
             if (_session.Advance())
                 RenderCurrent();
             else
-                RaiseEnded();
+                End();
         }
 
         private void HandleChoiceSelected(int index)

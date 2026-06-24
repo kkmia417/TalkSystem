@@ -124,13 +124,31 @@ namespace kkmia.TalkSystem
                 _history.AddRange(saveData.History);
 
             TriggerKey = saveData.TriggerKey ?? string.Empty;
-            State = saveData.State;
 
             if (saveData.CurrentDialogueId >= 0)
-                return LoadLine(saveData.CurrentDialogueId);
+            {
+                // 復元は「保存時の行をそのまま再構築する」操作であり、新規進行ではない。
+                // LoadLine は条件スキップや State=ShowingLine への上書きを伴うため使わず、
+                // 保存された CurrentData / CurrentChoices を組み立てつつ State は saveData の値を尊重する。
+                var data = _repository.Get(saveData.CurrentDialogueId);
+                if (data == null)
+                {
+                    End();
+                    return false;
+                }
+
+                CurrentData = data;
+                if (!_seenLineIds.Contains(data.Id))
+                    _seenLineIds.Add(data.Id);
+
+                CurrentChoices = data.GetChoices().Where(PassesCondition).ToList();
+                State = saveData.State;
+                return true;
+            }
 
             CurrentData = null;
             CurrentChoices = new List<DialogueChoice>();
+            State = saveData.State;
             return true;
         }
 

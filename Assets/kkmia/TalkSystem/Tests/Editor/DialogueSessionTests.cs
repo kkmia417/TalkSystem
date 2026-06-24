@@ -70,6 +70,31 @@ namespace kkmia.TalkSystem.Tests
             Assert.AreEqual(3, session.CurrentData.Id);
         }
 
+        [Test]
+        public void Session_Restore_PreservesHistoryAndSavedState()
+        {
+            var repo = new DialogueRepository(CsvLoader.ParseText<DialogueData>(
+                "Id,Speaker,Text,NextId\n1,A,Hello,2\n2,A,End,-1\n").Values);
+
+            var source = new DialogueSession(repo);
+            source.Start(1);
+            source.RecordDisplayedLine(source.CurrentData);
+            source.MarkLineReady();
+            Assert.AreEqual(DialogueSessionState.WaitingForInput, source.State);
+
+            var save = source.Capture();
+            Assert.AreEqual(1, save.History.Count);
+            Assert.AreEqual(DialogueSessionState.WaitingForInput, save.State);
+
+            var restored = new DialogueSession(repo);
+            Assert.IsTrue(restored.Restore(save));
+
+            Assert.AreEqual(1, restored.CurrentData.Id, "保存時の現在行が復元される");
+            Assert.AreEqual(1, restored.History.Count, "復元で履歴が増えない");
+            Assert.AreEqual(DialogueSessionState.WaitingForInput, restored.State,
+                "保存時の State が ShowingLine に潰されず維持される");
+        }
+
         private sealed class BlockKeyConditionEvaluator : IDialogueConditionEvaluator
         {
             private readonly string _blockedKey;
