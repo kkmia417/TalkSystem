@@ -9,6 +9,13 @@ namespace kkmia.TalkSystem
     {
         public static DialogueManager Instance { get; private set; }
 
+        /// <summary>
+        /// Instance が確定（生成）または破棄されたときに発火する。Binder 系は起動順に依存せず、
+        /// このイベントを購読することで Manager 生成後・差し替え後に自動接続できる。
+        /// 引数は新しい Instance（破棄時は null）。
+        /// </summary>
+        public static event Action<DialogueManager> InstanceChanged;
+
         [Header("CSVファイル")]
         [Tooltip("会話データを含むCSVファイル (TextAsset)")]
         [SerializeField] private TextAsset csvFile;
@@ -80,14 +87,27 @@ namespace kkmia.TalkSystem
 
             if (view != null)
                 SetView(view);
+
+            // Repository / View の初期化後に通知する。先に有効化済みの Binder が
+            // ここで接続でき、後から有効化される Binder は OnEnable で直接接続する。
+            RaiseInstanceChanged(this);
         }
 
         private void OnDestroy()
         {
             if (Instance == this)
+            {
                 Instance = null;
+                RaiseInstanceChanged(null);
+            }
 
             DisposePresenter();
+        }
+
+        private static void RaiseInstanceChanged(DialogueManager instance)
+        {
+            if (InstanceChanged != null)
+                InstanceChanged(instance);
         }
 
         public void SetConditionEvaluator(IDialogueConditionEvaluator evaluator)

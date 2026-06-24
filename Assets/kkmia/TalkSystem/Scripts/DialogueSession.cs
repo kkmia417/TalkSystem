@@ -29,8 +29,14 @@ namespace kkmia.TalkSystem
 
         public bool Start(int id, string triggerKey = null)
         {
+            // DialogueSession は 1 回の会話開始から終了までの状態を表す。
+            // 新しい会話を開始したら、表示履歴・既読行・選択履歴を会話単位で初期化する。
+            // ゲーム全体の既読/履歴が必要な場合は別コンポーネントとして設計する想定。
             TriggerKey = triggerKey ?? string.Empty;
             _skipGuard.Clear();
+            _seenLineIds.Clear();
+            _choiceHistory.Clear();
+            _history.Clear();
             return LoadLine(id);
         }
 
