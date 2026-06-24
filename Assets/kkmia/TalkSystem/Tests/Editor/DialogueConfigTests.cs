@@ -29,12 +29,13 @@ namespace kkmia.TalkSystem.Tests
         [Test]
         public void Settings_ClampsAndRaisesChangedOnce()
         {
-            var settings = new DialogueSettings();
+            // 既定値は 1f。クランプが「実際の変化」になるよう、購読前に 0.5f から始める。
+            var settings = new DialogueSettings { MasterVolume = 0.5f };
             var changes = 0;
             settings.Changed += () => changes++;
 
-            settings.MasterVolume = 2f; // clamps to 1
-            settings.MasterVolume = 1f; // no change -> no event
+            settings.MasterVolume = 2f; // clamps to 1 (0.5 -> 1) -> 変化したので 1 回発火
+            settings.MasterVolume = 1f; // 既に 1 -> 変化なし -> 発火しない
 
             Assert.AreEqual(1f, settings.MasterVolume);
             Assert.AreEqual(1, changes);
