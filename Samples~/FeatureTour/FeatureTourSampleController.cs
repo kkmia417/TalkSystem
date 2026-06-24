@@ -18,6 +18,7 @@ public sealed class FeatureTourSampleController : MonoBehaviour, IDialogueVariab
     private readonly List<string> _events = new List<string>();
     private DialogueSaveData _savedState;
     private bool _questFlag;
+    private bool _japaneseActive;
 
     private void Start()
     {
@@ -25,10 +26,39 @@ public sealed class FeatureTourSampleController : MonoBehaviour, IDialogueVariab
 
         DialogueManager.Instance.SetVariableResolver(this);
         DialogueManager.Instance.SetConditionEvaluator(this);
+        DialogueManager.Instance.SetTextResolver(new LocalizedDialogueTextResolver(BuildTranslations()));
+        DialogueManager.Instance.SetLanguage(string.Empty); // 既定は CSV（英語）。L キーで ja に切替。
         DialogueManager.Instance.DialogueEventTriggered += OnDialogueEvent;
         DialogueManager.Instance.LineCompleted += OnLineCompleted;
         DialogueManager.Instance.StartDialogueForState("SampleStart");
         RefreshSampleState();
+    }
+
+    private void Update()
+    {
+        if (DialogueManager.Instance == null) return;
+
+        // サンプル操作（実プロジェクトでは DialogueInputRouter / UI ボタンに割り当て推奨）。
+        if (Input.GetKeyDown(KeyCode.PageUp))
+            Rollback();
+        if (Input.GetKeyDown(KeyCode.L))
+            ToggleLanguage();
+        if (Input.GetKeyDown(KeyCode.F5))
+            SaveDialogue();
+        if (Input.GetKeyDown(KeyCode.F9))
+            RestoreDialogue();
+    }
+
+    // 多言語デモ用の翻訳テーブル（ja のみ。未登録/英語時は CSV の本文にフォールバック）。
+    private static DialogueTranslationTable BuildTranslations()
+    {
+        var table = new DialogueTranslationTable();
+        table.Add(1, "ja", "ようこそ、{playerName}。このサンプルは[color=#ffcc00]Talk System[/color]の機能を紹介します。");
+        table.Add(2, "ja", "ルートを選んでください。[w=0.3] [ruby=ひだり]左[/ruby]ルートには条件が必要です。");
+        table.Add(10, "ja", "条件を満たしたので[color=#88ccff]左[/color]ルートが開きました。");
+        table.Add(20, "ja", "右ルートは常に選べます。");
+        table.Add(30, "ja", "この行はセーブ・復元・巻き戻し・バックログ表示ができます。[w=0.2] L キーで言語を切り替えられます。");
+        return table;
     }
 
     private void OnDestroy()
@@ -82,6 +112,23 @@ public sealed class FeatureTourSampleController : MonoBehaviour, IDialogueVariab
     {
         canTakeLeftRoute = !canTakeLeftRoute;
         AddEventLog(canTakeLeftRoute ? "left_route_enabled" : "left_route_disabled");
+    }
+
+    public void Rollback()
+    {
+        if (DialogueManager.Instance != null && DialogueManager.Instance.Rollback())
+        {
+            AddEventLog("rollback");
+            RefreshBacklog();
+        }
+    }
+
+    public void ToggleLanguage()
+    {
+        _japaneseActive = !_japaneseActive;
+        if (DialogueManager.Instance != null)
+            DialogueManager.Instance.SetLanguage(_japaneseActive ? "ja" : string.Empty);
+        AddEventLog(_japaneseActive ? "language_ja" : "language_default");
     }
 
     private void OnDialogueEvent(DialogueEventContext context)
@@ -142,8 +189,10 @@ public sealed class FeatureTourSampleController : MonoBehaviour, IDialogueVariab
     {
         if (backlogText == null || DialogueManager.Instance == null) return;
 
+        // 新しい DialogueBacklog モデルで履歴を表示モデルへ変換する。
+        var entries = DialogueBacklog.Build(DialogueManager.Instance.History);
         var lines = new List<string>();
-        foreach (var entry in DialogueManager.Instance.History)
+        foreach (var entry in entries)
             lines.Add(entry.Speaker + ": " + entry.Text);
 
         backlogText.text = string.Join("\n", lines.ToArray());
