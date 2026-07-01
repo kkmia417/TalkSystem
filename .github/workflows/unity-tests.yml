@@ -41,10 +41,30 @@ jobs:
           restore-keys: |
             Library-${{ runner.os }}-
 
+      - name: Check Unity credentials
+        id: unity_credentials
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          if [ -n "$UNITY_LICENSE" ] || { [ -n "$UNITY_SERIAL" ] && [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ]; }; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip Unity tests
+        if: steps.unity_credentials.outputs.available != 'true'
+        run: echo "Unity license secrets are not configured; skipping Unity tests."
+
       - name: Run Unity EditMode Tests
+        if: steps.unity_credentials.outputs.available == 'true'
         uses: game-ci/unity-test-runner@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
@@ -54,7 +74,7 @@ jobs:
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.unity_credentials.outputs.available == 'true'
         with:
           name: unity-editmode-results
           path: test-results
