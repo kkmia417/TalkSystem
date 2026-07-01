@@ -19,6 +19,9 @@
   },
   "license": "MIT",
   "type": "tool",
+  "dependencies": {
+    "com.unity.ugui": "2.0.0"
+  },
   "samples": [
     {
       "displayName": "Feature Tour",

@@ -58,7 +58,14 @@ Open **Window > Package Manager > Add package from git URL**:
 https://github.com/kkmia417/TalkSystem.git
 ```
 
-Minimum Unity version: `6000.0`.
+For production projects, pin a release tag or commit:
+
+```text
+https://github.com/kkmia417/TalkSystem.git#v0.2.0
+https://github.com/kkmia417/TalkSystem.git#<commit-sha>
+```
+
+Minimum Unity version: `6000.0`. The package declares `com.unity.ugui@2.0.0`, which provides the UGUI and TextMeshPro assemblies used by the runtime UI. Live2D Cubism and Spine integrations are optional and stay behind scripting defines plus their external SDKs.
 
 ## Quick Start
 
