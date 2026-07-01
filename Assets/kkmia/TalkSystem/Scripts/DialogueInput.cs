@@ -25,6 +25,7 @@ namespace kkmia.TalkSystem
         [SerializeField] private KeyCode nextKey = KeyCode.Space;
         [SerializeField] private KeyCode backlogKey = KeyCode.B;
         [SerializeField] private KeyCode skipKey = KeyCode.LeftControl;
+        [SerializeField] private KeyCode autoKey = KeyCode.A;
         [SerializeField] private KeyCode rollbackKey = KeyCode.PageUp;
 
         public event Action<DialogueInputAction> InputReceived;
@@ -37,6 +38,8 @@ namespace kkmia.TalkSystem
                 Raise(DialogueInputAction.Backlog);
             if (Input.GetKeyDown(skipKey))
                 Raise(DialogueInputAction.Skip);
+            if (Input.GetKeyDown(autoKey))
+                Raise(DialogueInputAction.Auto);
             if (Input.GetKeyDown(rollbackKey))
                 Raise(DialogueInputAction.Rollback);
         }

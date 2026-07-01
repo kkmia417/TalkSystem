@@ -7,6 +7,7 @@ namespace kkmia.TalkSystem.Editor
     public sealed class DialogueValidationWindow : EditorWindow
     {
         private TextAsset _csvFile;
+        private DialogueValidationProfile _profile;
         private Vector2 _scroll;
         private DialogueValidationReport _report = new DialogueValidationReport();
         private DialogueValidationSeverity _minimumSeverity = DialogueValidationSeverity.Info;
@@ -28,6 +29,7 @@ namespace kkmia.TalkSystem.Editor
         {
             EditorGUILayout.Space();
             _csvFile = (TextAsset)EditorGUILayout.ObjectField("CSV File", _csvFile, typeof(TextAsset), false);
+            _profile = (DialogueValidationProfile)EditorGUILayout.ObjectField("Validation Profile", _profile, typeof(DialogueValidationProfile), false);
             _minimumSeverity = (DialogueValidationSeverity)EditorGUILayout.EnumPopup("Minimum Severity", _minimumSeverity);
 
             if (GUILayout.Button("Validate"))
@@ -44,7 +46,11 @@ namespace kkmia.TalkSystem.Editor
 
         private void Validate()
         {
-            _report = _csvFile != null ? DialogueValidator.ValidateCsv(_csvFile.text) : new DialogueValidationReport();
+            if (_profile != null && _csvFile == null)
+                _report = DialogueValidationRunner.ValidateProfile(_profile);
+            else
+                _report = _csvFile != null ? DialogueValidator.ValidateCsv(_csvFile.text, null, _profile) : new DialogueValidationReport();
+
             Repaint();
         }
 

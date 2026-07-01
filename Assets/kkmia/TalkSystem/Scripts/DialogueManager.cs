@@ -60,6 +60,16 @@ namespace kkmia.TalkSystem
             }
         }
 
+        public int CurrentChoiceCount
+        {
+            get { return _presenter != null ? _presenter.CurrentChoiceCount : 0; }
+        }
+
+        public bool HasCurrentChoices
+        {
+            get { return CurrentChoiceCount > 0; }
+        }
+
         private void Awake()
         {
             if (Instance != null && Instance != this)

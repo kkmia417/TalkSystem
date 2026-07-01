@@ -37,6 +37,11 @@ namespace kkmia.TalkSystem
             get { return _session.CurrentData; }
         }
 
+        public int CurrentChoiceCount
+        {
+            get { return _session.CurrentChoices != null ? _session.CurrentChoices.Count : 0; }
+        }
+
         public DialogueSession Session
         {
             get { return _session; }
