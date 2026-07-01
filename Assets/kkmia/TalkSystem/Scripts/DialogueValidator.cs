@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace kkmia.TalkSystem
@@ -19,10 +20,40 @@ namespace kkmia.TalkSystem
             return report;
         }
 
+        public static DialogueValidationReport ValidateCsv(string csvText, IEnumerable<int> entryIds, DialogueValidationProfile profile)
+        {
+            var document = DialogueCsvCodec.Parse(csvText);
+            var report = new DialogueValidationReport();
+            report.AddRange(document.Diagnostics.Messages);
+
+            ValidateHeaders(document.Headers, report);
+
+            var rows = CsvLoader.ParseRows<DialogueData>(document, report);
+            ValidateData(rows, report, entryIds);
+            ValidateAssets(rows, profile, report);
+            return report;
+        }
+
         public static DialogueValidationReport ValidateData(IEnumerable<DialogueData> data, IEnumerable<int> entryIds = null)
         {
             var report = new DialogueValidationReport();
             ValidateData(data, report, entryIds);
+            return report;
+        }
+
+        public static DialogueValidationReport ValidateData(IEnumerable<DialogueData> data, IEnumerable<int> entryIds, DialogueValidationProfile profile)
+        {
+            var report = new DialogueValidationReport();
+            var rows = data != null ? data.ToList() : new List<DialogueData>();
+            ValidateData(rows, report, entryIds);
+            ValidateAssets(rows, profile, report);
+            return report;
+        }
+
+        public static DialogueValidationReport ValidateAssets(IEnumerable<DialogueData> data, DialogueValidationProfile profile)
+        {
+            var report = new DialogueValidationReport();
+            ValidateAssets(data, profile, report);
             return report;
         }
 
@@ -285,6 +316,123 @@ namespace kkmia.TalkSystem
             }
 
             return report;
+        }
+
+        private static readonly Regex VariablePattern = new Regex(@"\{([A-Za-z0-9_.-]+)\}", RegexOptions.Compiled);
+
+        private static void ValidateAssets(IEnumerable<DialogueData> data, DialogueValidationProfile profile, DialogueValidationReport report)
+        {
+            if (profile == null || data == null) return;
+
+            var rows = data as IList<DialogueData> ?? data.ToList();
+            var severity = profile.MissingReferenceSeverity;
+
+            if (profile.CharacterDatabase != null)
+                report.AddRange(ValidateCharacters(rows, profile.CharacterDatabase).Messages);
+
+            ValidateCatalog(profile.EventKeyCatalog, DialogueSchema.EventKey, severity, report);
+            ValidateCatalog(profile.ConditionKeyCatalog, DialogueSchema.ConditionKey, severity, report);
+            ValidateCatalog(profile.VariableCatalog, "Variable", severity, report);
+
+            foreach (var row in rows)
+            {
+                ValidateBackgroundReference(row, profile.BackgroundDatabase, severity, report);
+                ValidateAudioReferences(row, profile.AudioDatabase, severity, report);
+                ValidateCatalogReferences(row, profile.EventKeyCatalog, profile.ConditionKeyCatalog, profile.VariableCatalog, severity, report);
+            }
+        }
+
+        private static void ValidateBackgroundReference(DialogueData row, BackgroundDatabase database, DialogueValidationSeverity severity, DialogueValidationReport report)
+        {
+            if (database == null || string.IsNullOrWhiteSpace(row.Background))
+                return;
+
+            var cue = row.GetBackgroundCue();
+            if (!cue.HasValue || cue.IsClear)
+                return;
+
+            Sprite sprite;
+            if (!database.TryGetSprite(cue.Key, out sprite))
+                report.Add(severity, row.RowNumber, DialogueSchema.Background, "Background key \"" + cue.Key + "\" is not found in the background database.");
+        }
+
+        private static void ValidateAudioReferences(DialogueData row, AudioDatabase database, DialogueValidationSeverity severity, DialogueValidationReport report)
+        {
+            if (database == null)
+                return;
+
+            var bgm = row.GetBgmCue();
+            if (bgm.HasValue && !bgm.IsClear)
+            {
+                AudioClip clip;
+                if (!database.TryGetBgm(bgm.Key, out clip))
+                    report.Add(severity, row.RowNumber, DialogueSchema.Bgm, "Bgm key \"" + bgm.Key + "\" is not found in the audio database.");
+            }
+
+            foreach (var seKey in row.GetSeKeys())
+            {
+                AudioClip clip;
+                if (!database.TryGetSe(seKey, out clip))
+                    report.Add(severity, row.RowNumber, DialogueSchema.Se, "Se key \"" + seKey + "\" is not found in the audio database.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(row.Voice))
+            {
+                var voiceKey = row.Voice.Trim();
+                AudioClip clip;
+                if (!database.TryGetVoice(voiceKey, out clip))
+                    report.Add(severity, row.RowNumber, DialogueSchema.Voice, "Voice key \"" + voiceKey + "\" is not found in the audio database.");
+            }
+        }
+
+        private static void ValidateCatalogReferences(DialogueData row, DialogueKeyCatalog eventCatalog,
+            DialogueKeyCatalog conditionCatalog, DialogueKeyCatalog variableCatalog,
+            DialogueValidationSeverity severity, DialogueValidationReport report)
+        {
+            if (eventCatalog != null && !string.IsNullOrEmpty(row.EventKey) && !eventCatalog.Contains(row.EventKey))
+                report.Add(severity, row.RowNumber, DialogueSchema.EventKey, "EventKey \"" + row.EventKey + "\" is not found in the event key catalog.");
+
+            if (conditionCatalog != null && !string.IsNullOrEmpty(row.ConditionKey) && !conditionCatalog.Contains(row.ConditionKey))
+                report.Add(severity, row.RowNumber, DialogueSchema.ConditionKey, "ConditionKey \"" + row.ConditionKey + "\" is not found in the condition key catalog.");
+
+            if (conditionCatalog != null)
+            {
+                foreach (var choice in row.GetChoices())
+                {
+                    if (!string.IsNullOrEmpty(choice.ConditionKey) && !conditionCatalog.Contains(choice.ConditionKey))
+                        report.Add(severity, row.RowNumber, DialogueSchema.Choices, "Choice ConditionKey \"" + choice.ConditionKey + "\" is not found in the condition key catalog.");
+                }
+            }
+
+            if (variableCatalog == null || string.IsNullOrEmpty(row.Text))
+                return;
+
+            foreach (Match match in VariablePattern.Matches(row.Text))
+            {
+                var variableName = match.Groups[1].Value;
+                if (!variableCatalog.Contains(variableName))
+                    report.Add(severity, row.RowNumber, "Variable", "Variable \"" + variableName + "\" is not found in the variable catalog.");
+            }
+        }
+
+        private static void ValidateCatalog(DialogueKeyCatalog catalog, string fieldName, DialogueValidationSeverity severity, DialogueValidationReport report)
+        {
+            if (catalog == null) return;
+
+            var seen = new Dictionary<string, int>();
+            var entries = catalog.Keys;
+            for (var i = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+                if (entry == null || string.IsNullOrWhiteSpace(entry.key))
+                    continue;
+
+                var key = entry.key.Trim();
+                if (seen.ContainsKey(key))
+                    report.Add(severity, 0, fieldName, "Catalog key \"" + key + "\" is duplicated.");
+                else
+                    seen.Add(key, i);
+            }
         }
 
         private static void ValidateStageDirectiveCharacters(DialogueData row, CharacterExpressionDatabase database, DialogueValidationReport report)

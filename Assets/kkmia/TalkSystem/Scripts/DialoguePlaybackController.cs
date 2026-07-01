@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace kkmia.TalkSystem
@@ -30,6 +31,8 @@ namespace kkmia.TalkSystem
         }
 
         public DialoguePlaybackMode Mode { get; private set; }
+
+        public event Action<DialoguePlaybackMode> ModeChanged;
 
         private void Awake()
         {
@@ -64,11 +67,15 @@ namespace kkmia.TalkSystem
 
         public void SetMode(DialoguePlaybackMode mode)
         {
+            var previous = Mode;
             Mode = mode;
             ApplyTextSpeed();
 
             if (_bound != null && mode == DialoguePlaybackMode.Normal)
                 _bound.SetAutoAdvanceOverride(false, 0f);
+
+            if (previous != Mode)
+                RaiseModeChanged();
         }
 
         public void ToggleAuto()
@@ -111,7 +118,8 @@ namespace kkmia.TalkSystem
             ApplyTextSpeed();
 
             // 選択肢の有無は View 側の自動送りガードが担保するため、ここでは false を渡してよい。
-            var plan = _planner.Plan(Mode, hasChoices: false, isRead: wasRead, settings: _settings);
+            var hasChoices = _bound != null && _bound.CurrentChoiceCount > 0;
+            var plan = _planner.Plan(Mode, hasChoices, wasRead, _settings);
 
             if (plan.CancelSkip)
             {
@@ -131,7 +139,7 @@ namespace kkmia.TalkSystem
             if (_bound != null)
                 _bound.SetAutoAdvanceOverride(false, 0f);
 
-            Mode = DialoguePlaybackMode.Normal;
+            SetMode(DialoguePlaybackMode.Normal);
         }
 
         private void ApplyTextSpeed()
@@ -140,9 +148,16 @@ namespace kkmia.TalkSystem
 
             var interval = Mode == DialoguePlaybackMode.Skip
                 ? DialogueTextSpeed.DefaultFastestInterval
-                : DialogueTextSpeed.ToInterval(_settings.TextSpeed);
+                : DialogueTextSpeed.ToInterval(_settings != null ? _settings.TextSpeed : 0.5f);
 
             _bound.SetTypewriterSpeed(interval);
+        }
+
+        private void RaiseModeChanged()
+        {
+            var handler = ModeChanged;
+            if (handler != null)
+                handler(Mode);
         }
     }
 }

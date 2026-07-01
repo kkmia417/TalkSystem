@@ -8,6 +8,9 @@ namespace kkmia.TalkSystem.Tests
     public sealed class DialogueManagerTests
     {
         private const string Csv = "Id,Speaker,Text,NextId\n1,A,Hello,2\n2,A,End,-1\n";
+        private const string ChoiceCsv = "Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey,EventKey,Choices\n" +
+                                         "1,A,Choose,-1,,,,,Go->2|Stay->-1\n" +
+                                         "2,A,End,-1,,,,,\n";
 
         [Test]
         public void Manager_NaturalEnd_HidesViewAndRaisesEndedOnce()
@@ -65,12 +68,38 @@ namespace kkmia.TalkSystem.Tests
             }
         }
 
+        [Test]
+        public void Manager_ExposesCurrentChoiceCount()
+        {
+            var view = CreateView("ChoiceDialogueView");
+            var manager = CreateManager(view, ChoiceCsv);
+
+            try
+            {
+                manager.StartDialogue(1);
+
+                Assert.AreEqual(DialogueSessionState.ChoicePending, manager.State);
+                Assert.AreEqual(2, manager.CurrentChoiceCount);
+                Assert.IsTrue(manager.HasCurrentChoices);
+            }
+            finally
+            {
+                Destroy(manager);
+                Destroy(view);
+            }
+        }
+
         private static DialogueManager CreateManager(DialogueView view)
+        {
+            return CreateManager(view, Csv);
+        }
+
+        private static DialogueManager CreateManager(DialogueView view, string csv)
         {
             // EditMode テストでは Awake が自動で呼ばれないため、フィールド設定後に明示的に起動する。
             var gameObject = new GameObject("DialogueManager");
             var manager = gameObject.AddComponent<DialogueManager>();
-            SetPrivateField(manager, "csvFile", new TextAsset(Csv));
+            SetPrivateField(manager, "csvFile", new TextAsset(csv));
             SetPrivateField(manager, "view", view);
             Invoke(manager, "Awake");
             return manager;
