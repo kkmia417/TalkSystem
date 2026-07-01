@@ -114,7 +114,8 @@ Choices use `Label->NextId` entries separated by `|`. Add `?conditionKey` to hid
 - `IDialogueTextResolver`: supports localization keys or external text databases
 - `IDialogueEventDispatcher`: reacts to `EventKey`
 - `IDialogueView`: swaps UGUI for custom UI Toolkit, Timeline, or in-game terminal views
-- `DialogueSaveData`: integrates current dialogue state with your save system
+- `DialogueSaveSystem` / `IDialogueSaveStorage`: multi-slot saves, thumbnails, storage injection, failure reporting, and schema migration hooks
+- `DialogueSaveData`: integrates current dialogue state with your own save system
 
 ## Editor Tools
 

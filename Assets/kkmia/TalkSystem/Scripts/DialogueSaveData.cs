@@ -22,6 +22,9 @@ namespace kkmia.TalkSystem
     [Serializable]
     public sealed class DialogueSaveData
     {
+        public int SchemaVersion = DialogueSaveSchema.CurrentVersion;
+        public string ContentVersion = string.Empty;
+        public string ProductChannel = string.Empty;
         public int CurrentDialogueId = -1;
         public string TriggerKey = string.Empty;
         public DialogueSessionState State = DialogueSessionState.Idle;
