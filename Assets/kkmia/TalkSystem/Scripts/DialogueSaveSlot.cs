@@ -9,6 +9,9 @@ namespace kkmia.TalkSystem
     [Serializable]
     public sealed class DialogueSaveSlot
     {
+        public int SchemaVersion = DialogueSaveSchema.CurrentVersion;
+        public string ContentVersion = string.Empty;
+        public string ProductChannel = string.Empty;
         public int SlotIndex = -1;
         public string Title = string.Empty;
         public long SavedAtUnix;

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using UnityEngine;
 
 namespace kkmia.TalkSystem
@@ -26,32 +27,27 @@ namespace kkmia.TalkSystem
             var path = SlotPath(slot);
             if (!File.Exists(path)) return false;
 
-            try
+            var json = File.ReadAllText(path, Encoding.UTF8);
+            var hasSchemaVersion = json.IndexOf("\"SchemaVersion\"", System.StringComparison.Ordinal) >= 0;
+            data = JsonUtility.FromJson<DialogueSaveSlot>(json);
+            if (data == null)
+                throw new InvalidDataException("Slot JSON did not contain a dialogue save slot.");
+
+            if (!hasSchemaVersion)
             {
-                var json = File.ReadAllText(path);
-                data = JsonUtility.FromJson<DialogueSaveSlot>(json);
-                return data != null;
+                data.SchemaVersion = 0;
+                if (data.Data != null)
+                    data.Data.SchemaVersion = 0;
             }
-            catch (System.Exception e)
-            {
-                Debug.LogError("[FileDialogueSaveStorage] スロット " + slot + " の読み込みに失敗しました: " + e.Message);
-                return false;
-            }
+
+            return true;
         }
 
         public void Save(DialogueSaveSlot slot)
         {
             if (slot == null) return;
             EnsureDirectory();
-
-            try
-            {
-                File.WriteAllText(SlotPath(slot.SlotIndex), JsonUtility.ToJson(slot));
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogError("[FileDialogueSaveStorage] スロット " + slot.SlotIndex + " の保存に失敗しました: " + e.Message);
-            }
+            AtomicWriteAllText(SlotPath(slot.SlotIndex), JsonUtility.ToJson(slot));
         }
 
         public void Delete(int slot)
@@ -92,15 +88,7 @@ namespace kkmia.TalkSystem
         {
             if (pngBytes == null || pngBytes.Length == 0) return;
             EnsureDirectory();
-
-            try
-            {
-                File.WriteAllBytes(ThumbnailPath(slot), pngBytes);
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogError("[FileDialogueSaveStorage] サムネイル " + slot + " の保存に失敗しました: " + e.Message);
-            }
+            AtomicWriteAllBytes(ThumbnailPath(slot), pngBytes);
         }
 
         private void EnsureDirectory()
@@ -117,6 +105,80 @@ namespace kkmia.TalkSystem
         private string ThumbnailPath(int slot)
         {
             return Path.Combine(_directory, SlotPrefix + slot + ".png");
+        }
+
+        private static void AtomicWriteAllText(string path, string contents)
+        {
+            AtomicWriteAllBytes(path, Encoding.UTF8.GetBytes(contents ?? string.Empty));
+        }
+
+        private static void AtomicWriteAllBytes(string path, byte[] bytes)
+        {
+            var directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                Directory.CreateDirectory(directory);
+
+            var tempPath = path + ".tmp";
+            try
+            {
+                using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    stream.Write(bytes, 0, bytes.Length);
+                    stream.Flush(true);
+                }
+
+                ReplaceAtomically(tempPath, path);
+            }
+            catch
+            {
+                TryDelete(tempPath);
+                throw;
+            }
+        }
+
+        private static void ReplaceAtomically(string tempPath, string targetPath)
+        {
+            if (!File.Exists(targetPath))
+            {
+                File.Move(tempPath, targetPath);
+                return;
+            }
+
+            var backupPath = targetPath + ".bak";
+            TryDelete(backupPath);
+
+            try
+            {
+                File.Replace(tempPath, targetPath, backupPath, true);
+                TryDelete(backupPath);
+            }
+            catch (System.PlatformNotSupportedException)
+            {
+                ReplaceWithMoveFallback(tempPath, targetPath, backupPath);
+            }
+            catch (IOException)
+            {
+                ReplaceWithMoveFallback(tempPath, targetPath, backupPath);
+            }
+        }
+
+        private static void ReplaceWithMoveFallback(string tempPath, string targetPath, string backupPath)
+        {
+            TryDelete(backupPath);
+            if (File.Exists(targetPath))
+                File.Move(targetPath, backupPath);
+
+            try
+            {
+                File.Move(tempPath, targetPath);
+                TryDelete(backupPath);
+            }
+            catch
+            {
+                if (!File.Exists(targetPath) && File.Exists(backupPath))
+                    File.Move(backupPath, targetPath);
+                throw;
+            }
         }
 
         private static void TryDelete(string path)
