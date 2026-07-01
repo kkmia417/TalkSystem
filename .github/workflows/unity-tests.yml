@@ -1,20 +1,37 @@
 name: Unity Tests
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
+    paths:
+      - "Assets/kkmia/TalkSystem/**"
+      - "Packages/**"
+      - "ProjectSettings/**"
+      - "package.json"
+      - ".github/workflows/unity-tests.yml"
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "Assets/kkmia/TalkSystem/**"
+      - "Packages/**"
+      - "ProjectSettings/**"
+      - "package.json"
+      - ".github/workflows/unity-tests.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   editmode:
     name: EditMode Tests
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          lfs: true
 
       - name: Cache Library
         uses: actions/cache@v4

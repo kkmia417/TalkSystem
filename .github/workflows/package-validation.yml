@@ -1,10 +1,41 @@
 name: Package Validation
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
+    paths:
+      - "package.json"
+      - "CHANGELOG.md"
+      - "LICENSE"
+      - "Tools/Validate-Package.ps1"
+      - "Tools/Validate-ConsumerInstall.ps1"
+      - "Documentation~/index.md"
+      - "Samples~/**"
+      - "Assets/kkmia/TalkSystem/Scripts/kkmia.TalkSystem.Runtime.asmdef"
+      - "Assets/kkmia/TalkSystem/Editor/kkmia.TalkSystem.Editor.asmdef"
+      - "Assets/kkmia/TalkSystem/Tests/Editor/kkmia.TalkSystem.Tests.asmdef"
+      - "Assets/kkmia/TalkSystem/Demo/**"
+      - ".github/workflows/package-validation.yml"
   pull_request:
     branches: [main]
+    paths:
+      - "package.json"
+      - "CHANGELOG.md"
+      - "LICENSE"
+      - "Tools/Validate-Package.ps1"
+      - "Tools/Validate-ConsumerInstall.ps1"
+      - "Documentation~/index.md"
+      - "Samples~/**"
+      - "Assets/kkmia/TalkSystem/Scripts/kkmia.TalkSystem.Runtime.asmdef"
+      - "Assets/kkmia/TalkSystem/Editor/kkmia.TalkSystem.Editor.asmdef"
+      - "Assets/kkmia/TalkSystem/Tests/Editor/kkmia.TalkSystem.Tests.asmdef"
+      - "Assets/kkmia/TalkSystem/Demo/**"
+      - ".github/workflows/package-validation.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
