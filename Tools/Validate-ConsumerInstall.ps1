@@ -3,6 +3,9 @@ param(
     [string]$PackageSource = "",
     [string]$UnityVersion = "6000.0.40f1",
     [int]$TimeoutSeconds = 600,
+    [ValidateSet("Old", "New", "Both")]
+    [string]$ActiveInputHandling = "Old",
+    [switch]$InstallInputSystem,
     [switch]$ImportSamples,
     [switch]$KeepProject
 )
@@ -69,6 +72,15 @@ function Write-TextFile([string]$Path, [string]$Value) {
 
 function Write-JsonFile([string]$Path, [object]$Value) {
     Write-TextFile $Path ($Value | ConvertTo-Json -Depth 16)
+}
+
+function Get-ActiveInputHandlerValue([string]$Mode) {
+    switch ($Mode) {
+        "Old" { return 0 }
+        "New" { return 1 }
+        "Both" { return 2 }
+        default { throw "Unsupported Active Input Handling mode: $Mode" }
+    }
 }
 
 function Copy-IfExists([string]$SourceRoot, [string]$StageRoot, [string]$RelativePath) {
@@ -244,12 +256,24 @@ try {
             "com.kkmia.talksystem" = $PackageSource
         }
     }
+    if ($InstallInputSystem) {
+        $manifest.dependencies["com.unity.inputsystem"] = "1.11.2"
+    }
     Write-JsonFile (Join-Path $consumerRoot "Packages/manifest.json") $manifest
 
     Write-TextFile (Join-Path $consumerRoot "ProjectSettings/ProjectVersion.txt") @"
 m_EditorVersion: $UnityVersion
 m_EditorVersionWithRevision: $UnityVersion
 "@
+
+    $sourceProjectSettings = Join-Path $root "ProjectSettings/ProjectSettings.asset"
+    $targetProjectSettings = Join-Path $consumerRoot "ProjectSettings/ProjectSettings.asset"
+    $activeInputHandler = Get-ActiveInputHandlerValue $ActiveInputHandling
+    if (Test-Path $sourceProjectSettings) {
+        $settings = Get-Content $sourceProjectSettings -Raw
+        $settings = [regex]::Replace($settings, 'activeInputHandler:\s*\d+', "activeInputHandler: $activeInputHandler")
+        Write-TextFile $targetProjectSettings $settings
+    }
 
     Invoke-UnityCheck $unityEditor $consumerRoot $logPath @()
     Assert-ConsumerResolution $consumerRoot
@@ -303,7 +327,7 @@ public static class TalkSystemConsumerInstallCheck
         Invoke-UnityCheck $unityEditor $consumerRoot $logPath @()
     }
 
-    Write-Host "Consumer install validation passed with package source '$PackageSource'."
+    Write-Host "Consumer install validation passed with package source '$PackageSource' (ActiveInputHandling=$ActiveInputHandling, InstallInputSystem=$InstallInputSystem)."
 }
 finally {
     if ($KeepProject) {

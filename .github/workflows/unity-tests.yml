@@ -41,6 +41,10 @@ jobs:
           restore-keys: |
             Library-${{ runner.os }}-
 
+      - name: Guard legacy input usage
+        shell: pwsh
+        run: ./Tools/Assert-NoUnguardedLegacyInput.ps1
+
       - name: Check Unity credentials
         id: unity_credentials
         env:
@@ -94,6 +98,10 @@ jobs:
           key: Library-playmode-${{ runner.os }}-${{ hashFiles('Packages/manifest.json', 'Packages/packages-lock.json', 'package.json') }}
           restore-keys: |
             Library-playmode-${{ runner.os }}-
+
+      - name: Guard legacy input usage
+        shell: pwsh
+        run: ./Tools/Assert-NoUnguardedLegacyInput.ps1
 
       - name: Check Unity credentials
         id: unity_credentials

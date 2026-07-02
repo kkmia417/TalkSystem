@@ -43,6 +43,7 @@ if ($ExpectedVersion -and $package.version -ne $ExpectedVersion) {
 }
 
 Assert-PackageDependency $package "com.unity.ugui" "2.0.0" "UnityEngine.UI and Unity.TextMeshPro runtime assemblies on Unity 6000.x"
+& (Join-Path $PSScriptRoot "Assert-NoUnguardedLegacyInput.ps1") -Root $root
 
 $changelog = Get-Content $changelogPath -Raw
 if ($changelog -notmatch [regex]::Escape("## [$($package.version)]")) {
@@ -55,6 +56,7 @@ $required = @(
     "Assets/kkmia/TalkSystem/Tests/Editor/kkmia.TalkSystem.Tests.asmdef",
     "Assets/kkmia/TalkSystem/Tests/PlayMode/kkmia.TalkSystem.PlayModeTests.asmdef",
     "Tools/Validate-ConsumerInstall.ps1",
+    "Tools/Assert-NoUnguardedLegacyInput.ps1",
     "Tools/Invoke-ReleaseChecks.ps1",
     "Documentation~/index.md",
     "Documentation~/release-checklist.md",

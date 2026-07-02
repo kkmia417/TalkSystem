@@ -9,6 +9,7 @@ on:
       - "CHANGELOG.md"
       - "LICENSE"
       - "Tools/Validate-Package.ps1"
+      - "Tools/Assert-NoUnguardedLegacyInput.ps1"
       - "Tools/Validate-ConsumerInstall.ps1"
       - "Tools/Invoke-ReleaseChecks.ps1"
       - "Documentation~/index.md"
@@ -27,6 +28,7 @@ on:
       - "CHANGELOG.md"
       - "LICENSE"
       - "Tools/Validate-Package.ps1"
+      - "Tools/Assert-NoUnguardedLegacyInput.ps1"
       - "Tools/Validate-ConsumerInstall.ps1"
       - "Tools/Invoke-ReleaseChecks.ps1"
       - "Documentation~/index.md"
@@ -57,6 +59,19 @@ jobs:
   consumer-install:
     name: Clean Consumer Install
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: old-no-input-system
+            activeInputHandler: 0
+            inputSystem: false
+          - name: new-input-system
+            activeInputHandler: 1
+            inputSystem: true
+          - name: both-input-system
+            activeInputHandler: 2
+            inputSystem: true
     steps:
       - uses: actions/checkout@v4
 
@@ -95,10 +110,20 @@ jobs:
             }
           } | ConvertTo-Json -Depth 8 | Set-Content -Path "$project/Packages/manifest.json" -Encoding UTF8
 
+          $manifest = Get-Content "$project/Packages/manifest.json" -Raw | ConvertFrom-Json
+          if ("${{ matrix.inputSystem }}" -eq "true") {
+            $manifest.dependencies | Add-Member -NotePropertyName "com.unity.inputsystem" -NotePropertyValue "1.11.2"
+            $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path "$project/Packages/manifest.json" -Encoding UTF8
+          }
+
           @"
           m_EditorVersion: 6000.0.40f1
           m_EditorVersionWithRevision: 6000.0.40f1
           "@ | Set-Content -Path "$project/ProjectSettings/ProjectVersion.txt" -Encoding UTF8
+
+          $settings = Get-Content "ProjectSettings/ProjectSettings.asset" -Raw
+          $settings = [regex]::Replace($settings, 'activeInputHandler:\s*\d+', "activeInputHandler: ${{ matrix.activeInputHandler }}")
+          $settings | Set-Content -Path "$project/ProjectSettings/ProjectSettings.asset" -Encoding UTF8
 
           @"
           using System.Linq;
@@ -115,6 +140,8 @@ jobs:
               {
                   Assert.AreEqual("kkmia.TalkSystem.DialogueManager", typeof(DialogueManager).FullName);
                   Assert.IsNotNull(new DialogueSaveData().Progress);
+                  Assert.AreEqual("kkmia.TalkSystem.DialogueKeyboardInput", typeof(DialogueKeyboardInput).FullName);
+                  Assert.IsFalse(DialogueKeyboard.GetKeyDown(DialogueKeyCode.None));
               }
 
               [Test]
@@ -152,5 +179,5 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always() && steps.unity_credentials.outputs.available == 'true'
         with:
-          name: clean-consumer-results
+          name: clean-consumer-results-${{ matrix.name }}
           path: consumer-test-results

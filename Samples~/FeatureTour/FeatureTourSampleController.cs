@@ -39,13 +39,13 @@ public sealed class FeatureTourSampleController : MonoBehaviour, IDialogueVariab
         if (DialogueManager.Instance == null) return;
 
         // サンプル操作（実プロジェクトでは DialogueInputRouter / UI ボタンに割り当て推奨）。
-        if (Input.GetKeyDown(KeyCode.PageUp))
+        if (DialogueKeyboard.GetKeyDown(DialogueKeyCode.PageUp))
             Rollback();
-        if (Input.GetKeyDown(KeyCode.L))
+        if (DialogueKeyboard.GetKeyDown(DialogueKeyCode.L))
             ToggleLanguage();
-        if (Input.GetKeyDown(KeyCode.F5))
+        if (DialogueKeyboard.GetKeyDown(DialogueKeyCode.F5))
             SaveDialogue();
-        if (Input.GetKeyDown(KeyCode.F9))
+        if (DialogueKeyboard.GetKeyDown(DialogueKeyCode.F9))
             RestoreDialogue();
     }
 

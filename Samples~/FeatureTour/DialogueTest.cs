@@ -35,15 +35,15 @@ namespace kkmia.TalkSystem
             if (DialogueManager.Instance == null)
                 return;
 
-            if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
+            if (DialogueKeyboard.GetKeyDown(DialogueKeyCode.Space) || DialogueKeyboard.GetKeyDown(DialogueKeyCode.Enter))
                 DialogueManager.Instance.RequestNext();
-            if (Input.GetKeyDown(KeyCode.Alpha1))
+            if (DialogueKeyboard.GetKeyDown(DialogueKeyCode.Alpha1))
                 StartDialogue(startDialogueId);
-            if (Input.GetKeyDown(KeyCode.Alpha2))
+            if (DialogueKeyboard.GetKeyDown(DialogueKeyCode.Alpha2))
                 StartTrigger(gameOverTriggerKey);
-            if (Input.GetKeyDown(KeyCode.Alpha3))
+            if (DialogueKeyboard.GetKeyDown(DialogueKeyCode.Alpha3))
                 StartTrigger(endTriggerKey);
-            if (Input.GetKeyDown(KeyCode.R))
+            if (DialogueKeyboard.GetKeyDown(DialogueKeyCode.R))
                 DialogueManager.Instance.Rollback();
         }
 
