@@ -40,6 +40,8 @@ namespace kkmia.TalkSystem
         private IDialogueVariableResolver _variableResolver = new EmptyDialogueVariableResolver();
         private IDialogueTextResolver _textResolver = new DefaultDialogueTextResolver();
         private IDialogueEventDispatcher _eventDispatcher;
+        private int _repositoryLoadGeneration;
+        private bool _destroyed;
 
         public event Action<DialogueEventContext> LineStarted;
         public event Action<DialogueEventContext> LineCompleted;
@@ -102,6 +104,7 @@ namespace kkmia.TalkSystem
                 return;
             }
 
+            _destroyed = false;
             Instance = this;
             // DontDestroyOnLoad は再生中のみ有効（エディタ/テストからの呼び出しは例外になる）。
             if (Application.isPlaying)
@@ -126,6 +129,9 @@ namespace kkmia.TalkSystem
 
         private void OnDestroy()
         {
+            _destroyed = true;
+            _repositoryLoadGeneration++;
+
             if (Instance == this)
             {
                 Instance = null;
@@ -226,6 +232,10 @@ namespace kkmia.TalkSystem
             ApplyPresenterConfiguration();
         }
 
+        /// <summary>
+        /// 非同期に Repository を読み込み、成功した最新世代のロードだけを反映する。
+        /// 進行中の会話がある間の Repository 差し替えは、セッション整合性を保つため拒否する。
+        /// </summary>
         public void LoadRepository(IDialogueRepositoryLoader loader)
         {
             if (loader == null)
@@ -234,8 +244,26 @@ namespace kkmia.TalkSystem
                 return;
             }
 
+            if (HasActiveDialogue())
+            {
+                const string message = "Cannot load repository while dialogue is active.";
+                Debug.LogError("DialogueManager: " + message);
+                RaiseError(message);
+                return;
+            }
+
+            var generation = ++_repositoryLoadGeneration;
             StartCoroutine(loader.Load(repository =>
             {
+                if (!IsCurrentRepositoryLoad(generation))
+                    return;
+
+                if (repository == null)
+                {
+                    RaiseRepositoryLoadError(generation, "Dialogue repository loader completed without a repository.");
+                    return;
+                }
+
                 _repository = repository;
                 if (view != null)
                 {
@@ -246,8 +274,7 @@ namespace kkmia.TalkSystem
                 }
             }, error =>
             {
-                Debug.LogError("DialogueManager: " + error);
-                RaiseError(error);
+                RaiseRepositoryLoadError(generation, error);
             }));
         }
 
@@ -397,6 +424,30 @@ namespace kkmia.TalkSystem
             }
 
             return true;
+        }
+
+        private bool HasActiveDialogue()
+        {
+            return _presenter != null
+                   && _presenter.CurrentData != null
+                   && _presenter.State != DialogueSessionState.Ended;
+        }
+
+        private bool IsCurrentRepositoryLoad(int generation)
+        {
+            return !_destroyed && generation == _repositoryLoadGeneration;
+        }
+
+        private void RaiseRepositoryLoadError(int generation, string error)
+        {
+            if (!IsCurrentRepositoryLoad(generation))
+                return;
+
+            var message = string.IsNullOrEmpty(error)
+                ? "Dialogue repository loading failed."
+                : error;
+            Debug.LogError("DialogueManager: " + message);
+            RaiseError(message);
         }
 
         private void RaiseLineStarted(DialogueEventContext context)

@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Reflection;
 using NUnit.Framework;
@@ -137,6 +138,93 @@ namespace kkmia.TalkSystem.Tests
             }
         }
 
+        [UnityTest]
+        public IEnumerator Manager_LoadRepository_IgnoresStaleCompletion()
+        {
+            var view = CreateView("RuntimeLoadedDialogueView");
+            var manager = CreateManagerWithoutCsv(view);
+            var slow = new ManualRepositoryLoader();
+            var fast = new ManualRepositoryLoader();
+
+            try
+            {
+                manager.LoadRepository(slow);
+                manager.LoadRepository(fast);
+
+                fast.Complete(CreateRepository("2", "Fast"));
+                yield return null;
+
+                slow.Complete(CreateRepository("1", "Slow"));
+                yield return null;
+
+                Assert.AreEqual("Fast", manager.Repository.Get(2).Text);
+                Assert.IsNull(manager.Repository.Get(1));
+            }
+            finally
+            {
+                Destroy(manager);
+                Destroy(view);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator Manager_LoadRepository_IgnoresStaleFailure()
+        {
+            var view = CreateView("RuntimeLoadedDialogueView");
+            var manager = CreateManagerWithoutCsv(view);
+            var slow = new ManualRepositoryLoader();
+            var fast = new ManualRepositoryLoader();
+            var errors = new System.Collections.Generic.List<string>();
+            manager.ErrorRaised += errors.Add;
+
+            try
+            {
+                manager.LoadRepository(slow);
+                manager.LoadRepository(fast);
+
+                fast.Complete(CreateRepository("2", "Fast"));
+                yield return null;
+
+                slow.Fail("Slow loader failed.");
+                yield return null;
+
+                Assert.AreEqual("Fast", manager.Repository.Get(2).Text);
+                CollectionAssert.IsEmpty(errors);
+            }
+            finally
+            {
+                Destroy(manager);
+                Destroy(view);
+            }
+        }
+
+        [Test]
+        public void Manager_LoadRepository_RejectsActiveSessionReplacement()
+        {
+            var view = CreateView("DialogueView");
+            var manager = CreateManager(view);
+            var loader = new ManualRepositoryLoader();
+            var errors = new System.Collections.Generic.List<string>();
+            manager.ErrorRaised += errors.Add;
+
+            try
+            {
+                manager.StartDialogue(1);
+                LogAssert.Expect(LogType.Error, "DialogueManager: Cannot load repository while dialogue is active.");
+
+                manager.LoadRepository(loader);
+
+                Assert.IsFalse(loader.Started);
+                CollectionAssert.AreEqual(new[] { "Cannot load repository while dialogue is active." }, errors);
+                Assert.AreEqual("Hello", manager.Repository.Get(1).Text);
+            }
+            finally
+            {
+                Destroy(manager);
+                Destroy(view);
+            }
+        }
+
         [Test]
         public void Manager_WithoutInspectorCsv_StillRaisesInstanceChanged()
         {
@@ -234,6 +322,12 @@ namespace kkmia.TalkSystem.Tests
             return new GameObject(name).AddComponent<DialogueView>();
         }
 
+        private static DialogueRepository CreateRepository(string id, string text)
+        {
+            return new DialogueRepository(CsvLoader.ParseText<DialogueData>(
+                "Id,Speaker,Text,NextId\n" + id + ",A," + text + ",-1\n").Values);
+        }
+
         private static void SetPrivateField(object target, string name, object value)
         {
             var field = target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
@@ -245,6 +339,44 @@ namespace kkmia.TalkSystem.Tests
         {
             if (component != null)
                 Object.DestroyImmediate(component.gameObject);
+        }
+
+        private sealed class ManualRepositoryLoader : IDialogueRepositoryLoader
+        {
+            private bool _completed;
+            private IDialogueRepository _repository;
+            private string _error;
+
+            public bool Started { get; private set; }
+
+            public IEnumerator Load(Action<IDialogueRepository> onCompleted, Action<string> onError)
+            {
+                Started = true;
+                while (!_completed)
+                    yield return null;
+
+                if (!string.IsNullOrEmpty(_error))
+                {
+                    if (onError != null)
+                        onError(_error);
+                    yield break;
+                }
+
+                if (onCompleted != null)
+                    onCompleted(_repository);
+            }
+
+            public void Complete(IDialogueRepository repository)
+            {
+                _repository = repository;
+                _completed = true;
+            }
+
+            public void Fail(string error)
+            {
+                _error = error;
+                _completed = true;
+            }
         }
     }
 }
