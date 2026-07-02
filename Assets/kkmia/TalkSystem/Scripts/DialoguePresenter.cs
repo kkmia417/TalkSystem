@@ -164,6 +164,9 @@ namespace kkmia.TalkSystem
             if (!_session.Restore(saveData))
                 return false;
 
+            _rollback.Clear();
+            _rollback.Push(_session.Capture());
+
             if (_session.CurrentData != null)
                 RenderCurrent(RenderReason.Restore);
 

@@ -85,6 +85,31 @@ namespace kkmia.TalkSystem.Tests
         }
 
         [Test]
+        public void Presenter_RestoreState_ResetsRollbackHistoryToRestoredLine()
+        {
+            var repo = new DialogueRepository(CsvLoader.ParseText<DialogueData>(
+                "Id,Speaker,Text,NextId\n1,A,One,2\n2,A,Two,3\n3,A,Three,-1\n").Values);
+            var view = new FakeDialogueView();
+            var presenter = new DialoguePresenter(repo, view);
+
+            presenter.Start(1);
+            view.RaiseNext(); // -> line 2
+            var saveAtLine2 = presenter.CaptureState();
+            view.RaiseNext(); // -> line 3
+
+            Assert.IsTrue(presenter.RestoreState(saveAtLine2));
+
+            Assert.AreEqual(2, presenter.CurrentData.Id);
+            Assert.IsFalse(presenter.CanRollback, "復元直後はロード前の履歴へ戻れない");
+            Assert.IsFalse(presenter.Rollback(), "ロード前セッションの履歴を復元しない");
+
+            view.RaiseNext(); // line 2 -> line 3
+            Assert.IsTrue(presenter.CanRollback);
+            Assert.IsTrue(presenter.Rollback());
+            Assert.AreEqual(2, presenter.CurrentData.Id, "復元後に進めた分だけ戻れる");
+        }
+
+        [Test]
         public void Presenter_ProgressMarkersRaiseAndPersistInSaveData()
         {
             var repo = CreateProgressRepository();
