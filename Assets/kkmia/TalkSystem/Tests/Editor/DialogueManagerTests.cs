@@ -1,6 +1,8 @@
+using System.Collections;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 using Object = UnityEngine.Object;
 
 namespace kkmia.TalkSystem.Tests
@@ -89,6 +91,73 @@ namespace kkmia.TalkSystem.Tests
             }
         }
 
+        [UnityTest]
+        public IEnumerator Manager_WithoutInspectorCsv_LoadsRepositoryAndPlaysThroughBoundView()
+        {
+            InvokeStatic("ResetStatics");
+            var view = CreateView("RuntimeLoadedDialogueView");
+            var binder = view.gameObject.AddComponent<DialogueViewBinder>();
+            Invoke(binder, "Awake");
+            Invoke(binder, "OnEnable");
+
+            var manager = CreateManagerWithoutCsv(null);
+            var eventKeys = new System.Collections.Generic.List<string>();
+            manager.DialogueEventTriggered += context => eventKeys.Add(context.EventKey);
+
+            try
+            {
+                Assert.AreSame(manager, DialogueManager.Instance);
+                Assert.IsNull(manager.Repository);
+
+                manager.LoadRepository(new TextAssetDialogueRepositoryLoader(new TextAsset(
+                    "Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey,EventKey\n" +
+                    "1,A,Runtime loaded,2,,,,reward\n" +
+                    "2,A,End,-1,,,,\n")));
+
+                yield return null;
+                yield return null;
+
+                Assert.IsNotNull(manager.Repository);
+
+                manager.StartDialogue(1);
+
+                Assert.AreEqual(1, manager.CurrentData.Id);
+                CollectionAssert.AreEqual(new[] { "reward" }, eventKeys);
+
+                view.RequestNext();
+
+                Assert.AreEqual(2, manager.CurrentData.Id);
+            }
+            finally
+            {
+                Invoke(binder, "OnDisable");
+                Destroy(manager);
+                Destroy(view);
+                InvokeStatic("ResetStatics");
+            }
+        }
+
+        [Test]
+        public void Manager_WithoutInspectorCsv_StillRaisesInstanceChanged()
+        {
+            InvokeStatic("ResetStatics");
+            var instances = new System.Collections.Generic.List<DialogueManager>();
+            DialogueManager.InstanceChanged += instances.Add;
+            var manager = CreateManagerWithoutCsv(null);
+
+            try
+            {
+                Assert.AreSame(manager, DialogueManager.Instance);
+                CollectionAssert.AreEqual(new[] { manager }, instances);
+                Assert.IsNull(manager.Repository);
+            }
+            finally
+            {
+                Destroy(manager);
+                InvokeStatic("ResetStatics");
+            }
+        }
+
         [Test]
         public void Manager_ResetStatics_ClearsInstanceAndSubscribers()
         {
@@ -125,6 +194,16 @@ namespace kkmia.TalkSystem.Tests
             var manager = gameObject.AddComponent<DialogueManager>();
             SetPrivateField(manager, "csvFile", new TextAsset(csv));
             SetPrivateField(manager, "view", view);
+            Invoke(manager, "Awake");
+            return manager;
+        }
+
+        private static DialogueManager CreateManagerWithoutCsv(DialogueView view)
+        {
+            var gameObject = new GameObject("DialogueManager");
+            var manager = gameObject.AddComponent<DialogueManager>();
+            if (view != null)
+                SetPrivateField(manager, "view", view);
             Invoke(manager, "Awake");
             return manager;
         }

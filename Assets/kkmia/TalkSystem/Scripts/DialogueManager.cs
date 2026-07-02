@@ -107,18 +107,14 @@ namespace kkmia.TalkSystem
             if (Application.isPlaying)
                 DontDestroyOnLoad(gameObject);
 
-            if (csvFile == null)
-            {
-                Debug.LogError("DialogueManager: csvFile が設定されていません。");
-                return;
-            }
-
-            _repository = new DialogueRepository(csvFile);
             _eventDispatcher = new DelegateDialogueEventDispatcher(context =>
             {
                 if (DialogueEventTriggered != null)
                     DialogueEventTriggered(context);
             });
+
+            if (csvFile != null)
+                _repository = new DialogueRepository(csvFile);
 
             if (view != null)
                 SetView(view);
@@ -186,7 +182,8 @@ namespace kkmia.TalkSystem
 
             if (_repository == null)
             {
-                Debug.LogError("DialogueManager: Repository が初期化されていません。");
+                view.Clear();
+                view.gameObject.SetActive(false);
                 return;
             }
 
