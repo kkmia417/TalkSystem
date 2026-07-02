@@ -7,6 +7,28 @@ namespace kkmia.TalkSystem
         Skip
     }
 
+    public readonly struct DialoguePlaybackState
+    {
+        public DialoguePlaybackState(
+            DialoguePlaybackMode mode,
+            bool hasCurrentLine,
+            bool hasChoices,
+            bool isCurrentLineRead)
+        {
+            Mode = mode;
+            HasCurrentLine = hasCurrentLine;
+            HasChoices = hasChoices;
+            IsCurrentLineRead = isCurrentLineRead;
+        }
+
+        public DialoguePlaybackMode Mode { get; }
+        public bool HasCurrentLine { get; }
+        public bool HasChoices { get; }
+        public bool IsCurrentLineRead { get; }
+        public bool IsAuto { get { return Mode == DialoguePlaybackMode.Auto; } }
+        public bool IsSkip { get { return Mode == DialoguePlaybackMode.Skip; } }
+    }
+
     /// <summary>
     /// 行が表示待ちになったときに、どう進めるかの判断結果。
     /// </summary>

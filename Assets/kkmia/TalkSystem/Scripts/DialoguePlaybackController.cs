@@ -34,7 +34,13 @@ namespace kkmia.TalkSystem
 
         public DialoguePlaybackMode Mode { get; private set; }
 
+        public DialoguePlaybackState PlaybackState
+        {
+            get { return BuildPlaybackState(); }
+        }
+
         public event Action<DialoguePlaybackMode> ModeChanged;
+        public event Action<DialoguePlaybackState> StateChanged;
 
         private void Awake()
         {
@@ -75,7 +81,10 @@ namespace kkmia.TalkSystem
             ApplyCurrentPlan();
 
             if (previous != Mode)
+            {
                 RaiseModeChanged();
+                RaiseStateChanged();
+            }
         }
 
         public void ToggleAuto()
@@ -125,7 +134,10 @@ namespace kkmia.TalkSystem
             _currentLineWasRead = wasRead;
 
             ApplyTextSpeed();
+            var previousMode = Mode;
             ApplyCurrentPlan();
+            if (previousMode == Mode)
+                RaiseStateChanged();
 
             // Apply the playback plan after the session has exposed choice state.
         }
@@ -141,7 +153,10 @@ namespace kkmia.TalkSystem
             if (_bound != null)
                 _bound.SetAutoAdvanceOverride(false, 0f);
 
+            var previousMode = Mode;
             SetMode(DialoguePlaybackMode.Normal);
+            if (previousMode == Mode)
+                RaiseStateChanged();
         }
 
         private void ApplyCurrentPlan()
@@ -183,6 +198,21 @@ namespace kkmia.TalkSystem
             var handler = ModeChanged;
             if (handler != null)
                 handler(Mode);
+        }
+
+        private void RaiseStateChanged()
+        {
+            var handler = StateChanged;
+            if (handler != null)
+                handler(BuildPlaybackState());
+        }
+
+        private DialoguePlaybackState BuildPlaybackState()
+        {
+            var hasChoices = _bound != null &&
+                             (_bound.State == DialogueSessionState.ChoicePending ||
+                              _bound.CurrentChoiceCount > 0);
+            return new DialoguePlaybackState(Mode, _hasCurrentLine, hasChoices, _currentLineWasRead);
         }
     }
 }

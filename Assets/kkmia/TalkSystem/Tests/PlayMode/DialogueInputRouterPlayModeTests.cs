@@ -77,6 +77,31 @@ namespace kkmia.TalkSystem.Tests
             }
         }
 
+        [UnityTest]
+        public IEnumerator Router_RollbackCancelsPlaybackMode()
+        {
+            var root = new GameObject("DialogueRoutingRollback");
+            root.AddComponent<DialogueView>();
+            var controller = root.AddComponent<DialoguePlaybackController>();
+            var input = root.AddComponent<ManualInputSource>();
+            var router = root.AddComponent<DialogueInputRouter>();
+
+            try
+            {
+                ConfigureRouter(router, input, controller, null);
+
+                controller.SetMode(DialoguePlaybackMode.Skip);
+                input.Raise(DialogueInputAction.Rollback);
+                yield return null;
+
+                Assert.AreEqual(DialoguePlaybackMode.Normal, controller.Mode);
+            }
+            finally
+            {
+                UnityEngine.Object.Destroy(root);
+            }
+        }
+
         private static void ConfigureRouter(
             DialogueInputRouter router,
             ManualInputSource input,
