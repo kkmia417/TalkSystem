@@ -18,6 +18,8 @@ namespace kkmia.TalkSystem
         private DialogueReadRegistry _readRegistry;
         private IDialogueSettingsStore _settingsStore;
         private DialogueManager _bound;
+        private bool _hasCurrentLine;
+        private bool _currentLineWasRead;
 
         /// <summary>共有設定。コンフィグ画面や音量バインダーから参照する。</summary>
         public DialogueSettings Settings
@@ -70,9 +72,7 @@ namespace kkmia.TalkSystem
             var previous = Mode;
             Mode = mode;
             ApplyTextSpeed();
-
-            if (_bound != null && mode == DialoguePlaybackMode.Normal)
-                _bound.SetAutoAdvanceOverride(false, 0f);
+            ApplyCurrentPlan();
 
             if (previous != Mode)
                 RaiseModeChanged();
@@ -96,6 +96,13 @@ namespace kkmia.TalkSystem
             _bound = target;
             _bound.LineStarted += HandleLineStarted;
             _bound.DialogueEnded += HandleDialogueEnded;
+
+            if (_bound.CurrentData != null)
+            {
+                _hasCurrentLine = true;
+                _currentLineWasRead = _readRegistry == null || _readRegistry.IsRead(_bound.CurrentData.Id);
+                ApplyCurrentPlan();
+            }
         }
 
         private void Unbind()
@@ -114,25 +121,20 @@ namespace kkmia.TalkSystem
             // 既読判定はマーク前に行う（スキップの既読限定判定のため）。
             var wasRead = _readRegistry.IsRead(id);
             _readRegistry.MarkRead(id);
+            _hasCurrentLine = true;
+            _currentLineWasRead = wasRead;
 
             ApplyTextSpeed();
+            ApplyCurrentPlan();
 
-            // 選択肢の有無は View 側の自動送りガードが担保するため、ここでは false を渡してよい。
-            var hasChoices = _bound != null && _bound.CurrentChoiceCount > 0;
-            var plan = _planner.Plan(Mode, hasChoices, wasRead, _settings);
-
-            if (plan.CancelSkip)
-            {
-                SetMode(DialoguePlaybackMode.Normal);
-                return;
-            }
-
-            if (_bound != null)
-                _bound.SetAutoAdvanceOverride(plan.ShouldAdvance, plan.Delay);
+            // Apply the playback plan after the session has exposed choice state.
         }
 
         private void HandleDialogueEnded(DialogueEventContext context)
         {
+            _hasCurrentLine = false;
+            _currentLineWasRead = false;
+
             if (_readRegistry != null)
                 _readRegistry.Save();
 
@@ -140,6 +142,29 @@ namespace kkmia.TalkSystem
                 _bound.SetAutoAdvanceOverride(false, 0f);
 
             SetMode(DialoguePlaybackMode.Normal);
+        }
+
+        private void ApplyCurrentPlan()
+        {
+            if (_bound == null)
+                return;
+
+            if (Mode == DialoguePlaybackMode.Normal || !_hasCurrentLine)
+            {
+                _bound.SetAutoAdvanceOverride(false, 0f);
+                return;
+            }
+
+            var hasChoices = _bound.State == DialogueSessionState.ChoicePending || _bound.CurrentChoiceCount > 0;
+            var plan = _planner.Plan(Mode, hasChoices, _currentLineWasRead, _settings);
+
+            if (plan.CancelSkip)
+            {
+                SetMode(DialoguePlaybackMode.Normal);
+                return;
+            }
+
+            _bound.SetAutoAdvanceOverride(plan.ShouldAdvance, plan.Delay);
         }
 
         private void ApplyTextSpeed()

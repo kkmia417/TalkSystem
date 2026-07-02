@@ -24,6 +24,9 @@ namespace kkmia.TalkSystem
         [field: SerializeField] public string Se { get; internal set; }
         [field: SerializeField] public string Voice { get; internal set; }
         [field: SerializeField] public string CharactersRaw { get; internal set; }
+        [field: SerializeField] public string ChapterKey { get; internal set; }
+        [field: SerializeField] public string RouteKey { get; internal set; }
+        [field: SerializeField] public string EndingKey { get; internal set; }
 
         public int RowNumber { get; internal set; }
 
@@ -65,6 +68,21 @@ namespace kkmia.TalkSystem
         public bool HasCharacters
         {
             get { return !string.IsNullOrEmpty(CharactersRaw); }
+        }
+
+        public bool HasChapterKey
+        {
+            get { return !string.IsNullOrEmpty(ChapterKey); }
+        }
+
+        public bool HasRouteKey
+        {
+            get { return !string.IsNullOrEmpty(RouteKey); }
+        }
+
+        public bool HasEndingKey
+        {
+            get { return !string.IsNullOrEmpty(EndingKey); }
         }
 
         public IReadOnlyList<DialogueChoice> GetChoices()
@@ -122,6 +140,9 @@ namespace kkmia.TalkSystem
                 Se = Se,
                 Voice = Voice,
                 CharactersRaw = CharactersRaw,
+                ChapterKey = ChapterKey,
+                RouteKey = RouteKey,
+                EndingKey = EndingKey,
                 RowNumber = RowNumber
             };
         }

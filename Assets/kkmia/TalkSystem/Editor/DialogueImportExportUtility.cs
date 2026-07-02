@@ -31,6 +31,9 @@ namespace kkmia.TalkSystem.Editor
         public string se;
         public string voice;
         public string characters;
+        public string chapterKey;
+        public string routeKey;
+        public string endingKey;
     }
 
     public static class DialogueImportExportUtility
@@ -56,7 +59,10 @@ namespace kkmia.TalkSystem.Editor
                     bgm = row.Bgm,
                     se = row.Se,
                     voice = row.Voice,
-                    characters = row.CharactersRaw
+                    characters = row.CharactersRaw,
+                    chapterKey = row.ChapterKey,
+                    routeKey = row.RouteKey,
+                    endingKey = row.EndingKey
                 });
             }
 
@@ -71,6 +77,41 @@ namespace kkmia.TalkSystem.Editor
                 : Enumerable.Empty<IReadOnlyList<string>>();
 
             return DialogueCsvCodec.Write(DialogueSchema.FullHeaders, rows);
+        }
+
+        public static string ExportTranslationCsv(string scenarioCsv, IEnumerable<string> languageKeys, string existingTranslationCsv = null)
+        {
+            var languages = NormalizeTranslationLanguages(languageKeys);
+            var existing = string.IsNullOrEmpty(existingTranslationCsv)
+                ? null
+                : DialogueTranslationTable.FromCsv(existingTranslationCsv);
+
+            var headers = new List<string> { DialogueSchema.Id, DialogueSchema.Speaker, "Source" };
+            headers.AddRange(languages);
+
+            var rows = CsvLoader.ParseText<DialogueData>(scenarioCsv).Values
+                .OrderBy(row => row.Id)
+                .Select(row =>
+                {
+                    var values = new List<string>
+                    {
+                        row.Id.ToString(),
+                        row.Speaker ?? string.Empty,
+                        row.Text ?? string.Empty
+                    };
+
+                    foreach (var language in languages)
+                    {
+                        string text;
+                        values.Add(existing != null && existing.TryGet(row.Id, language, out text)
+                            ? text ?? string.Empty
+                            : string.Empty);
+                    }
+
+                    return values;
+                });
+
+            return DialogueCsvCodec.Write(headers, rows);
         }
 
         public static string YarnLikeToCsv(string scriptText)
@@ -157,8 +198,30 @@ namespace kkmia.TalkSystem.Editor
                 row.bgm ?? string.Empty,
                 row.se ?? string.Empty,
                 row.voice ?? string.Empty,
-                row.characters ?? string.Empty
+                row.characters ?? string.Empty,
+                row.chapterKey ?? string.Empty,
+                row.routeKey ?? string.Empty,
+                row.endingKey ?? string.Empty
             };
+        }
+
+        private static List<string> NormalizeTranslationLanguages(IEnumerable<string> languageKeys)
+        {
+            var languages = new List<string>();
+            if (languageKeys == null)
+                return languages;
+
+            foreach (var languageKey in languageKeys)
+            {
+                if (string.IsNullOrWhiteSpace(languageKey))
+                    continue;
+
+                var language = languageKey.Trim();
+                if (!DialogueTranslationTable.IsMetadataHeader(language) && !languages.Contains(language))
+                    languages.Add(language);
+            }
+
+            return languages;
         }
 
         private static int ExtractTargetId(string value)

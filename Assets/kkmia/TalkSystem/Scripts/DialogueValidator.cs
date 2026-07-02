@@ -296,23 +296,28 @@ namespace kkmia.TalkSystem
 
         public static DialogueValidationReport ValidateCharacters(IEnumerable<DialogueData> data, CharacterExpressionDatabase database)
         {
+            return ValidateCharacters(data, database, DialogueValidationSeverity.Warning);
+        }
+
+        public static DialogueValidationReport ValidateCharacters(IEnumerable<DialogueData> data, CharacterExpressionDatabase database, DialogueValidationSeverity severity)
+        {
             var report = new DialogueValidationReport();
             if (database == null || data == null) return report;
 
             foreach (var row in data)
             {
+                ValidateStageDirectiveCharacters(row, database, severity, report);
+
                 CharacterDefinition character;
                 if (!database.TryGetCharacter(row.Speaker, out character))
                 {
-                    report.Add(DialogueValidationSeverity.Warning, row.RowNumber, DialogueSchema.Speaker, "Speaker is not found in the character expression database.");
+                    report.Add(severity, row.RowNumber, DialogueSchema.Speaker, "Speaker is not found in the character expression database.");
                     continue;
                 }
 
                 Sprite sprite;
                 if (!string.IsNullOrEmpty(row.EmotionKey) && !character.TryGetSprite(row.EmotionKey, out sprite))
-                    report.Add(DialogueValidationSeverity.Warning, row.RowNumber, DialogueSchema.EmotionKey, "EmotionKey is not found in the character expression database.");
-
-                ValidateStageDirectiveCharacters(row, database, report);
+                    report.Add(severity, row.RowNumber, DialogueSchema.EmotionKey, "EmotionKey is not found in the character expression database.");
             }
 
             return report;
@@ -328,18 +333,241 @@ namespace kkmia.TalkSystem
             var severity = profile.MissingReferenceSeverity;
 
             if (profile.CharacterDatabase != null)
-                report.AddRange(ValidateCharacters(rows, profile.CharacterDatabase).Messages);
+                report.AddRange(ValidateCharacters(rows, profile.CharacterDatabase, severity).Messages);
 
             ValidateCatalog(profile.EventKeyCatalog, DialogueSchema.EventKey, severity, report);
             ValidateCatalog(profile.ConditionKeyCatalog, DialogueSchema.ConditionKey, severity, report);
             ValidateCatalog(profile.VariableCatalog, "Variable", severity, report);
+            ValidateCatalog(profile.ChapterKeyCatalog, DialogueSchema.ChapterKey, severity, report);
+            ValidateCatalog(profile.RouteKeyCatalog, DialogueSchema.RouteKey, severity, report);
+            ValidateCatalog(profile.EndingKeyCatalog, DialogueSchema.EndingKey, severity, report);
 
             foreach (var row in rows)
             {
                 ValidateBackgroundReference(row, profile.BackgroundDatabase, severity, report);
                 ValidateAudioReferences(row, profile.AudioDatabase, severity, report);
-                ValidateCatalogReferences(row, profile.EventKeyCatalog, profile.ConditionKeyCatalog, profile.VariableCatalog, severity, report);
+                ValidateCatalogReferences(row, profile.EventKeyCatalog, profile.ConditionKeyCatalog, profile.VariableCatalog,
+                    profile.ChapterKeyCatalog, profile.RouteKeyCatalog, profile.EndingKeyCatalog, severity, report);
             }
+
+            ValidateLocalization(rows, profile, report);
+        }
+
+        private sealed class LocalizationValue
+        {
+            public int RowNumber;
+            public string Text;
+        }
+
+        private sealed class LocalizationEntry
+        {
+            public readonly Dictionary<string, LocalizationValue> Values = new Dictionary<string, LocalizationValue>();
+        }
+
+        private static void ValidateLocalization(IList<DialogueData> rows, DialogueValidationProfile profile, DialogueValidationReport report)
+        {
+            if (profile == null || profile.TranslationCsvFiles == null || profile.TranslationCsvFiles.Count == 0)
+                return;
+
+            var languages = NormalizeLocalizationLanguages(profile.LocalizationLanguageKeys);
+            if (languages.Count == 0)
+            {
+                report.Add(DialogueValidationSeverity.Warning, 0, DialogueSchema.Localization,
+                    "Translation CSV files are configured, but no localization language keys are configured.");
+                return;
+            }
+
+            var scenarioById = new Dictionary<int, DialogueData>();
+            foreach (var row in rows)
+            {
+                if (row != null && row.Id > 0 && !scenarioById.ContainsKey(row.Id))
+                    scenarioById.Add(row.Id, row);
+            }
+
+            var entries = new Dictionary<int, LocalizationEntry>();
+            var availableLanguages = new HashSet<string>();
+            var severity = profile.LocalizationSeverity;
+
+            foreach (var translationFile in profile.TranslationCsvFiles)
+            {
+                if (translationFile == null)
+                {
+                    report.Add(DialogueValidationSeverity.Error, 0, DialogueSchema.Localization,
+                        "Dialogue validation profile contains a missing translation CSV file reference.");
+                    continue;
+                }
+
+                var document = DialogueCsvCodec.Parse(translationFile.text);
+                report.AddRange(document.Diagnostics.Messages);
+                MergeTranslationDocument(document, scenarioById, entries, availableLanguages, severity, report);
+            }
+
+            foreach (var language in languages)
+            {
+                if (!availableLanguages.Contains(language))
+                    report.Add(severity, 1, DialogueSchema.Localization,
+                        "Translation CSV is missing language column \"" + language + "\".");
+            }
+
+            foreach (var row in rows)
+            {
+                if (row == null || row.Id <= 0)
+                    continue;
+
+                LocalizationEntry entry;
+                entries.TryGetValue(row.Id, out entry);
+
+                foreach (var language in languages)
+                    ValidateLocalizedText(row, entry, language, profile.FallbackLanguageKey, profile.VariableCatalog, severity, report);
+            }
+        }
+
+        private static List<string> NormalizeLocalizationLanguages(IReadOnlyList<string> languageKeys)
+        {
+            var result = new List<string>();
+            if (languageKeys == null)
+                return result;
+
+            for (var i = 0; i < languageKeys.Count; i++)
+            {
+                if (string.IsNullOrWhiteSpace(languageKeys[i]))
+                    continue;
+
+                var language = languageKeys[i].Trim();
+                if (!result.Contains(language))
+                    result.Add(language);
+            }
+
+            return result;
+        }
+
+        private static void MergeTranslationDocument(DialogueCsvDocument document, Dictionary<int, DialogueData> scenarioById,
+            Dictionary<int, LocalizationEntry> entries, HashSet<string> availableLanguages,
+            DialogueValidationSeverity severity, DialogueValidationReport report)
+        {
+            if (document.Headers == null || document.Headers.Count == 0)
+            {
+                report.Add(severity, 1, DialogueSchema.Localization, "Translation CSV header row is missing.");
+                return;
+            }
+
+            var headerMap = DialogueSchema.BuildHeaderMap(document.Headers);
+            int idColumn;
+            if (!headerMap.TryGetValue(DialogueSchema.Id, out idColumn))
+            {
+                report.Add(severity, 1, DialogueSchema.Id, "Translation CSV requires an Id column.");
+                return;
+            }
+
+            foreach (var row in document.Rows)
+            {
+                var values = row.Values;
+                if (values == null || values.Count <= idColumn || string.IsNullOrWhiteSpace(values[idColumn]))
+                    continue;
+
+                int id;
+                if (!int.TryParse(values[idColumn], out id))
+                {
+                    report.Add(severity, row.RowNumber, DialogueSchema.Id, "Translation Id must be an integer.");
+                    continue;
+                }
+
+                if (!scenarioById.ContainsKey(id))
+                    report.Add(severity, row.RowNumber, DialogueSchema.Localization,
+                        "Translation Id " + id + " does not exist in scenario data.");
+
+                LocalizationEntry entry;
+                if (!entries.TryGetValue(id, out entry))
+                {
+                    entry = new LocalizationEntry();
+                    entries.Add(id, entry);
+                }
+
+                for (var column = 0; column < document.Headers.Count; column++)
+                {
+                    var header = document.Headers[column];
+                    if (DialogueTranslationTable.IsMetadataHeader(header))
+                        continue;
+
+                    var language = header.Trim();
+                    availableLanguages.Add(language);
+                    var text = column < values.Count ? values[column] : string.Empty;
+
+                    if (entry.Values.ContainsKey(language) && !string.IsNullOrWhiteSpace(text))
+                        report.Add(DialogueValidationSeverity.Warning, row.RowNumber, DialogueSchema.Localization,
+                            "Duplicate translation for Id " + id + " language \"" + language + "\"; the later value will be used.");
+
+                    entry.Values[language] = new LocalizationValue
+                    {
+                        RowNumber = row.RowNumber,
+                        Text = text ?? string.Empty
+                    };
+                }
+            }
+        }
+
+        private static void ValidateLocalizedText(DialogueData source, LocalizationEntry entry, string language,
+            string fallbackLanguage, DialogueKeyCatalog variableCatalog,
+            DialogueValidationSeverity severity, DialogueValidationReport report)
+        {
+            LocalizationValue value = null;
+            var hasText = false;
+            if (entry != null && entry.Values.TryGetValue(language, out value))
+                hasText = !string.IsNullOrWhiteSpace(value.Text);
+
+            if (!hasText)
+            {
+                report.Add(severity, source.RowNumber, DialogueSchema.Localization,
+                    "Missing translation for Id " + source.Id + " language \"" + language + "\".");
+
+                if (!string.IsNullOrWhiteSpace(fallbackLanguage) && fallbackLanguage != language && entry != null)
+                {
+                    LocalizationValue fallbackValue;
+                    if (entry.Values.TryGetValue(fallbackLanguage, out fallbackValue) &&
+                        !string.IsNullOrWhiteSpace(fallbackValue.Text))
+                    {
+                        report.Add(DialogueValidationSeverity.Info, source.RowNumber, DialogueSchema.Localization,
+                            "Id " + source.Id + " language \"" + language + "\" will use fallback language \"" + fallbackLanguage + "\".");
+                    }
+                }
+
+                return;
+            }
+
+            ValidateLocalizedVariables(source, language, value, variableCatalog, severity, report);
+        }
+
+        private static void ValidateLocalizedVariables(DialogueData source, string language, LocalizationValue value,
+            DialogueKeyCatalog variableCatalog, DialogueValidationSeverity severity, DialogueValidationReport report)
+        {
+            var sourceVariables = ExtractVariableNames(source.Text);
+            var localizedVariables = ExtractVariableNames(value.Text);
+
+            foreach (var variable in sourceVariables)
+            {
+                if (!localizedVariables.Contains(variable))
+                    report.Add(severity, value.RowNumber, DialogueSchema.Localization,
+                        "Variable placeholder \"" + variable + "\" from source Id " + source.Id + " is missing in language \"" + language + "\".");
+            }
+
+            foreach (var variable in localizedVariables)
+            {
+                if (!sourceVariables.Contains(variable) && (variableCatalog == null || !variableCatalog.Contains(variable)))
+                    report.Add(severity, value.RowNumber, DialogueSchema.Localization,
+                        "Variable placeholder \"" + variable + "\" in language \"" + language + "\" is not present in source text or the variable catalog.");
+            }
+        }
+
+        private static HashSet<string> ExtractVariableNames(string text)
+        {
+            var variables = new HashSet<string>();
+            if (string.IsNullOrEmpty(text))
+                return variables;
+
+            foreach (Match match in VariablePattern.Matches(text))
+                variables.Add(match.Groups[1].Value);
+
+            return variables;
         }
 
         private static void ValidateBackgroundReference(DialogueData row, BackgroundDatabase database, DialogueValidationSeverity severity, DialogueValidationReport report)
@@ -387,6 +615,7 @@ namespace kkmia.TalkSystem
 
         private static void ValidateCatalogReferences(DialogueData row, DialogueKeyCatalog eventCatalog,
             DialogueKeyCatalog conditionCatalog, DialogueKeyCatalog variableCatalog,
+            DialogueKeyCatalog chapterCatalog, DialogueKeyCatalog routeCatalog, DialogueKeyCatalog endingCatalog,
             DialogueValidationSeverity severity, DialogueValidationReport report)
         {
             if (eventCatalog != null && !string.IsNullOrEmpty(row.EventKey) && !eventCatalog.Contains(row.EventKey))
@@ -403,6 +632,15 @@ namespace kkmia.TalkSystem
                         report.Add(severity, row.RowNumber, DialogueSchema.Choices, "Choice ConditionKey \"" + choice.ConditionKey + "\" is not found in the condition key catalog.");
                 }
             }
+
+            if (chapterCatalog != null && !string.IsNullOrEmpty(row.ChapterKey) && !chapterCatalog.Contains(row.ChapterKey))
+                report.Add(severity, row.RowNumber, DialogueSchema.ChapterKey, "ChapterKey \"" + row.ChapterKey + "\" is not found in the chapter key catalog.");
+
+            if (routeCatalog != null && !string.IsNullOrEmpty(row.RouteKey) && !routeCatalog.Contains(row.RouteKey))
+                report.Add(severity, row.RowNumber, DialogueSchema.RouteKey, "RouteKey \"" + row.RouteKey + "\" is not found in the route key catalog.");
+
+            if (endingCatalog != null && !string.IsNullOrEmpty(row.EndingKey) && !endingCatalog.Contains(row.EndingKey))
+                report.Add(severity, row.RowNumber, DialogueSchema.EndingKey, "EndingKey \"" + row.EndingKey + "\" is not found in the ending key catalog.");
 
             if (variableCatalog == null || string.IsNullOrEmpty(row.Text))
                 return;
@@ -435,7 +673,8 @@ namespace kkmia.TalkSystem
             }
         }
 
-        private static void ValidateStageDirectiveCharacters(DialogueData row, CharacterExpressionDatabase database, DialogueValidationReport report)
+        private static void ValidateStageDirectiveCharacters(DialogueData row, CharacterExpressionDatabase database,
+            DialogueValidationSeverity severity, DialogueValidationReport report)
         {
             foreach (var directive in row.GetStageDirectives())
             {
@@ -446,14 +685,14 @@ namespace kkmia.TalkSystem
                 CharacterDefinition character;
                 if (!database.TryGetCharacter(directive.CharacterKey, out character))
                 {
-                    report.Add(DialogueValidationSeverity.Warning, row.RowNumber, DialogueSchema.Characters,
+                    report.Add(severity, row.RowNumber, DialogueSchema.Characters,
                         "Character \"" + directive.CharacterKey + "\" is not found in the character expression database.");
                     continue;
                 }
 
                 Sprite sprite;
                 if (directive.HasExpression && !character.TryGetSprite(directive.Expression, out sprite))
-                    report.Add(DialogueValidationSeverity.Warning, row.RowNumber, DialogueSchema.Characters,
+                    report.Add(severity, row.RowNumber, DialogueSchema.Characters,
                         "Expression \"" + directive.Expression + "\" for \"" + directive.CharacterKey + "\" is not found in the character expression database.");
             }
         }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace kkmia.TalkSystem
@@ -37,6 +38,35 @@ namespace kkmia.TalkSystem
             return _byId.TryGetValue(id, out byLanguage) && byLanguage.TryGetValue(languageKey, out text);
         }
 
+        public IReadOnlyList<int> Ids
+        {
+            get { return _byId.Keys.OrderBy(id => id).ToList(); }
+        }
+
+        public IReadOnlyList<string> LanguageKeys
+        {
+            get
+            {
+                var languages = new HashSet<string>();
+                foreach (var byLanguage in _byId.Values)
+                {
+                    foreach (var language in byLanguage.Keys)
+                    {
+                        if (!string.IsNullOrEmpty(language))
+                            languages.Add(language);
+                    }
+                }
+
+                return languages.OrderBy(language => language).ToList();
+            }
+        }
+
+        public bool HasNonEmptyText(int id, string languageKey)
+        {
+            string text;
+            return TryGet(id, languageKey, out text) && !string.IsNullOrWhiteSpace(text);
+        }
+
         /// <summary>
         /// 翻訳 CSV から構築する。1 列目ヘッダは Id、以降のヘッダ列が言語キー。
         /// </summary>
@@ -58,10 +88,29 @@ namespace kkmia.TalkSystem
                 if (!int.TryParse(values[0], out id)) continue;
 
                 for (var c = 1; c < doc.Headers.Count && c < values.Count; c++)
+                {
+                    if (IsMetadataHeader(doc.Headers[c]))
+                        continue;
+
                     table.Add(id, doc.Headers[c], values[c]);
+                }
             }
 
             return table;
+        }
+
+        public static bool IsMetadataHeader(string header)
+        {
+            if (string.IsNullOrWhiteSpace(header))
+                return true;
+
+            var normalized = header.Trim().ToLowerInvariant();
+            return normalized == "id" ||
+                   normalized == "speaker" ||
+                   normalized == "source" ||
+                   normalized == "text" ||
+                   normalized == "notes" ||
+                   normalized == "comment";
         }
     }
 

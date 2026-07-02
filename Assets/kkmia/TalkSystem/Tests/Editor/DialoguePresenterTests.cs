@@ -85,6 +85,53 @@ namespace kkmia.TalkSystem.Tests
         }
 
         [Test]
+        public void Presenter_ProgressMarkersRaiseAndPersistInSaveData()
+        {
+            var repo = CreateProgressRepository();
+            var view = new FakeDialogueView();
+            var presenter = new DialoguePresenter(repo, view);
+            var events = new List<DialogueProgressEventContext>();
+            presenter.ProgressMarkerReached += events.Add;
+
+            presenter.Start(1);
+
+            Assert.AreEqual(2, events.Count);
+            Assert.AreEqual(DialogueProgressMarkerType.Chapter, events[0].Marker.Type);
+            Assert.AreEqual("chapter_1", events[0].Marker.Key);
+            Assert.IsTrue(events[0].Marker.IsFirstReach);
+            Assert.AreEqual(DialogueProgressMarkerType.Route, events[1].Marker.Type);
+            Assert.AreEqual("route_a", events[1].Marker.Key);
+            Assert.IsTrue(events[1].Marker.IsFirstReach);
+
+            view.RaiseNext();
+
+            Assert.AreEqual(5, events.Count);
+            Assert.AreEqual(DialogueProgressMarkerType.Chapter, events[2].Marker.Type);
+            Assert.IsFalse(events[2].Marker.IsFirstReach);
+            Assert.AreEqual(DialogueProgressMarkerType.Route, events[3].Marker.Type);
+            Assert.IsFalse(events[3].Marker.IsFirstReach);
+            Assert.AreEqual(DialogueProgressMarkerType.Ending, events[4].Marker.Type);
+            Assert.AreEqual("ending_good", events[4].Marker.Key);
+            Assert.IsTrue(events[4].Marker.IsFirstReach);
+
+            var save = presenter.CaptureState();
+            CollectionAssert.AreEqual(new[] { "chapter_1" }, save.Progress.ReachedChapterKeys);
+            CollectionAssert.AreEqual(new[] { "route_a" }, save.Progress.ReachedRouteKeys);
+            CollectionAssert.AreEqual(new[] { "ending_good" }, save.Progress.ReachedEndingKeys);
+            Assert.AreEqual("ending_good", save.Progress.CurrentEndingKey);
+
+            var restored = new DialoguePresenter(repo, new FakeDialogueView());
+            var restoredEventCount = 0;
+            restored.ProgressMarkerReached += _ => restoredEventCount++;
+
+            Assert.IsTrue(restored.RestoreState(save));
+            Assert.AreEqual(0, restoredEventCount);
+            Assert.AreEqual("chapter_1", restored.Session.Progress.CurrentChapterKey);
+            Assert.AreEqual("route_a", restored.Session.Progress.CurrentRouteKey);
+            Assert.AreEqual("ending_good", restored.Session.Progress.CurrentEndingKey);
+        }
+
+        [Test]
         public void Presenter_RebindMidSession_KeepsSessionAndRedrawsCurrentLine()
         {
             var repo = CreateRepository();
@@ -156,6 +203,26 @@ namespace kkmia.TalkSystem.Tests
             var csv = "Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey,EventKey,Choices\n" +
                       "1,A,Hello,2,,,,reward,\n" +
                       "2,A,End,-1,,,,,\n";
+            return new DialogueRepository(CsvLoader.ParseText<DialogueData>(csv).Values);
+        }
+
+        private static DialogueRepository CreateProgressRepository()
+        {
+            var csv = DialogueCsvCodec.Write(DialogueSchema.FullHeaders, new[]
+            {
+                new[]
+                {
+                    "1", "A", "Start", "2", string.Empty, string.Empty, string.Empty,
+                    string.Empty, string.Empty, string.Empty, string.Empty, string.Empty,
+                    string.Empty, string.Empty, string.Empty, "chapter_1", "route_a", string.Empty
+                },
+                new[]
+                {
+                    "2", "A", "End", "-1", string.Empty, string.Empty, string.Empty,
+                    string.Empty, string.Empty, string.Empty, string.Empty, string.Empty,
+                    string.Empty, string.Empty, string.Empty, "chapter_1", "route_a", "ending_good"
+                }
+            });
             return new DialogueRepository(CsvLoader.ParseText<DialogueData>(csv).Values);
         }
 

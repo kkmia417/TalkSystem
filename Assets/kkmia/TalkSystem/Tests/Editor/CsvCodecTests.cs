@@ -43,5 +43,25 @@ namespace kkmia.TalkSystem.Tests
             Assert.AreEqual(2, data.GetChoices().Count);
             Assert.AreEqual(0.5f, data.AutoNextSeconds);
         }
+
+        [Test]
+        public void Parse_ProgressColumns_LoadsMarkers()
+        {
+            var csv = DialogueCsvCodec.Write(DialogueSchema.FullHeaders, new[]
+            {
+                new[]
+                {
+                    "1", "A", "Progress", "-1", string.Empty, string.Empty, string.Empty,
+                    string.Empty, string.Empty, string.Empty, string.Empty, string.Empty,
+                    string.Empty, string.Empty, string.Empty, "chapter_1", "route_a", "ending_good"
+                }
+            });
+
+            var data = CsvLoader.ParseText<DialogueData>(csv)[1];
+
+            Assert.AreEqual("chapter_1", data.ChapterKey);
+            Assert.AreEqual("route_a", data.RouteKey);
+            Assert.AreEqual("ending_good", data.EndingKey);
+        }
     }
 }

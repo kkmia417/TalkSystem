@@ -56,5 +56,42 @@ namespace kkmia.TalkSystem.Tests
 
             Assert.AreEqual("voice_01", entry.Voice);
         }
+
+        [Test]
+        public void ReplayVoice_DelegatesVoiceKeyToAudioPlayer()
+        {
+            var player = new RecordingAudioPlayer();
+            var entry = new DialogueBacklogEntry { VoiceKey = "voice_01" };
+
+            Assert.IsTrue(DialogueBacklog.ReplayVoice(entry, player));
+            Assert.AreEqual("voice_01", player.LastVoiceKey);
+            Assert.IsFalse(DialogueBacklog.ReplayVoice(new DialogueBacklogEntry(), player));
+        }
+
+        private sealed class RecordingAudioPlayer : IDialogueAudioPlayer
+        {
+            public string LastVoiceKey;
+
+            public void PlayBgm(string bgmKey, bool stop, string transition, float duration)
+            {
+            }
+
+            public void PlaySe(string seKey)
+            {
+            }
+
+            public void PlayVoice(string voiceKey)
+            {
+                LastVoiceKey = voiceKey;
+            }
+
+            public void StopVoice()
+            {
+            }
+
+            public void StopAll()
+            {
+            }
+        }
     }
 }

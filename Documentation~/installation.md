@@ -50,6 +50,14 @@ powershell -ExecutionPolicy Bypass -File ./Tools/Validate-ConsumerInstall.ps1 -P
 
 To also import and compile the Feature Tour sample, add `-ImportSamples`.
 
+For the complete pre-release gate, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ./Tools/Invoke-ReleaseChecks.ps1 -ImportSamples
+```
+
+This wraps package validation, documentation link checks, Unity EditMode/PlayMode tests, clean consumer install validation, and optional sample import validation. See [Release Checklist](release-checklist.md).
+
 ## Samples
 
 After installing through UPM, open the package in Package Manager and import the **Feature Tour** sample.

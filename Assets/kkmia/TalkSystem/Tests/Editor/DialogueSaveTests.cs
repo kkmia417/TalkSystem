@@ -190,6 +190,85 @@ namespace kkmia.TalkSystem.Tests
         }
 
         [Test]
+        public void Service_GetSlotViewModel_ReportsEmptySlot()
+        {
+            var service = new DialogueSaveService(new MemoryStorage());
+
+            var model = service.GetSlotViewModel(4);
+
+            Assert.AreEqual(4, model.SlotIndex);
+            Assert.AreEqual(DialogueSaveSlotCategory.Manual, model.Category);
+            Assert.IsTrue(model.IsEmpty);
+            Assert.IsFalse(model.CanLoad);
+            Assert.IsFalse(model.HasError);
+        }
+
+        [Test]
+        public void Service_ViewModels_CategorizeSlotsAndExposeThumbnailMetadata()
+        {
+            var storage = new MemoryStorage();
+            var service = new DialogueSaveService(storage);
+            var thumbnail = new byte[] { 1, 2, 3 };
+
+            service.Save(DialogueSaveSlotConventions.AutosaveSlot, new DialogueSaveData { CurrentDialogueId = 1 }, "auto", true, 10);
+            service.QuickSave(new DialogueSaveData { CurrentDialogueId = 2 }, "quick", 30);
+            service.Save(2, new DialogueSaveData { CurrentDialogueId = 3 }, "manual", false, 20);
+            storage.Thumbs[2] = thumbnail;
+
+            var autosave = service.GetSlotViewModel(DialogueSaveSlotConventions.AutosaveSlot, includeThumbnail: false);
+            var quicksave = service.GetSlotViewModel(DialogueSaveSlotConventions.QuickSaveSlot, includeThumbnail: false);
+            var manual = service.GetSlotViewModel(2);
+
+            Assert.AreEqual(DialogueSaveSlotCategory.Autosave, autosave.Category);
+            Assert.AreEqual(DialogueSaveSlotCategory.QuickSave, quicksave.Category);
+            Assert.AreEqual(DialogueSaveSlotCategory.Manual, manual.Category);
+            Assert.AreEqual("manual", manual.Title);
+            Assert.AreEqual(20, manual.SavedAtUnix);
+            Assert.IsTrue(manual.CanLoad);
+            Assert.IsTrue(manual.HasThumbnail);
+            CollectionAssert.AreEqual(thumbnail, manual.ThumbnailPngBytes);
+        }
+
+        [Test]
+        public void Service_GetLatestContinueCandidate_UsesNewestLoadableSlot()
+        {
+            var storage = new MemoryStorage();
+            var service = new DialogueSaveService(storage);
+
+            service.Save(DialogueSaveSlotConventions.AutosaveSlot, new DialogueSaveData { CurrentDialogueId = 1 }, "auto", true, 10);
+            service.QuickSave(new DialogueSaveData { CurrentDialogueId = 2 }, "quick", 30);
+            service.Save(2, new DialogueSaveData { CurrentDialogueId = 3 }, "manual", false, 20);
+
+            var latest = service.GetLatestContinueCandidate(includeThumbnail: false);
+            var latestWithoutQuick = service.GetLatestContinueCandidate(includeQuickSaves: false, includeThumbnail: false);
+            var latestManualOnly = service.GetLatestContinueCandidate(includeAutosaves: false, includeQuickSaves: false, includeThumbnail: false);
+
+            Assert.AreEqual(DialogueSaveSlotConventions.QuickSaveSlot, latest.SlotIndex);
+            Assert.AreEqual(2, latestWithoutQuick.SlotIndex);
+            Assert.AreEqual(2, latestManualOnly.SlotIndex);
+        }
+
+        [Test]
+        public void Service_QuickLoadAndDelete_UseReservedQuickSaveSlot()
+        {
+            var storage = new MemoryStorage();
+            var service = new DialogueSaveService(storage);
+
+            service.QuickSave(new DialogueSaveData { CurrentDialogueId = 5 }, "quick", 99);
+            var loaded = service.QuickLoad();
+
+            Assert.IsNotNull(loaded);
+            Assert.AreEqual(DialogueSaveSlotConventions.QuickSaveSlot, loaded.SlotIndex);
+            Assert.AreEqual(5, loaded.Data.CurrentDialogueId);
+
+            service.Delete(DialogueSaveSlotConventions.QuickSaveSlot);
+            var model = service.GetSlotViewModel(DialogueSaveSlotConventions.QuickSaveSlot);
+
+            Assert.IsTrue(model.IsEmpty);
+            Assert.IsNull(service.GetLatestContinueCandidate(includeThumbnail: false));
+        }
+
+        [Test]
         public void Service_SaveFailure_ReturnsNullAndReportsFailure()
         {
             var service = new DialogueSaveService(new ThrowingSaveStorage());

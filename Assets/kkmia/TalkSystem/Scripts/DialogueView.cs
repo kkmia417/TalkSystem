@@ -59,6 +59,9 @@ namespace kkmia.TalkSystem
         private Coroutine autoNextCoroutine;
         private bool _autoOverrideActive;
         private float _autoOverrideSeconds;
+        private bool _autoAdvanceSuspended;
+        private bool _lineReady;
+        private DialogueData _currentData;
         private Transform _runtimeChoicesContainer;
         private readonly List<Button> _choiceButtons = new List<Button>();
         private IReadOnlyList<DialogueChoice> _activeChoices = new List<DialogueChoice>();
@@ -89,6 +92,8 @@ namespace kkmia.TalkSystem
             CancelAutoNextTimer();
             ClearChoiceButtons();
 
+            _currentData = data;
+            _lineReady = false;
             _activeChoices = choices ?? new List<DialogueChoice>();
 
             // Show can be called while the view is still inactive, but it must not
@@ -135,6 +140,7 @@ namespace kkmia.TalkSystem
 
         private void CompleteLine(DialogueData data, Action onComplete)
         {
+            _lineReady = true;
             DrawChoices();
 
             if (nextButton != null)
@@ -325,11 +331,33 @@ namespace kkmia.TalkSystem
         {
             _autoOverrideActive = active;
             _autoOverrideSeconds = seconds < 0f ? 0f : seconds;
+
+            if (_lineReady && !IsTyping)
+                StartAutoNextTimer(_currentData);
+        }
+
+        public void SetAutoAdvanceSuspended(bool suspended)
+        {
+            if (_autoAdvanceSuspended == suspended)
+                return;
+
+            _autoAdvanceSuspended = suspended;
+            if (_autoAdvanceSuspended)
+            {
+                CancelAutoNextTimer();
+                return;
+            }
+
+            if (_lineReady && !IsTyping)
+                StartAutoNextTimer(_currentData);
         }
 
         private void StartAutoNextTimer(DialogueData data)
         {
             CancelAutoNextTimer();
+            if (_autoAdvanceSuspended)
+                return;
+
             if (_activeChoices != null && _activeChoices.Count > 0)
                 return;
 
@@ -358,6 +386,7 @@ namespace kkmia.TalkSystem
         private IEnumerator AutoNextCoroutine(float seconds)
         {
             yield return new WaitForSeconds(seconds);
+            autoNextCoroutine = null;
             if (OnNextRequested != null)
                 OnNextRequested();
         }
@@ -380,6 +409,8 @@ namespace kkmia.TalkSystem
             ForceStop();
             CancelAutoNextTimer();
             ClearChoiceButtons();
+            _currentData = null;
+            _lineReady = false;
             _activeChoices = new List<DialogueChoice>();
 
             if (speakerText != null)

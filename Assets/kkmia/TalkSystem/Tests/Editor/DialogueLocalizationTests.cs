@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace kkmia.TalkSystem.Tests
 {
@@ -78,6 +80,83 @@ namespace kkmia.TalkSystem.Tests
             Assert.IsTrue(table.TryGet(2, "en", out text));
             Assert.AreEqual("Goodbye", text);
             Assert.IsFalse(table.TryGet(3, "ja", out text));
+        }
+
+        [Test]
+        public void FromCsv_IgnoresContextColumns()
+        {
+            var table = DialogueTranslationTable.FromCsv("Id,Speaker,Source,en\n1,A,Raw text,Hello\n");
+
+            CollectionAssert.AreEqual(new[] { "en" }, table.LanguageKeys);
+        }
+
+        [Test]
+        public void ValidateLocalization_ReportsFallbackUsage()
+        {
+            var scenario = "Id,Speaker,Text,NextId\n1,A,Hello,-1\n";
+            var profile = CreateLocalizationProfile("Id,Source,ja,en\n1,Hello,Fallback text,\n", new[] { "en" }, "ja");
+
+            var report = DialogueValidator.ValidateCsv(scenario, new[] { 1 }, profile);
+
+            Assert.IsTrue(report.Messages.Any(m =>
+                m.Severity == DialogueValidationSeverity.Info &&
+                m.FieldName == DialogueSchema.Localization &&
+                m.Message.Contains("fallback language \"ja\"")));
+        }
+
+        [Test]
+        public void ValidateLocalization_ReportsMissingTranslationKey()
+        {
+            var scenario = "Id,Speaker,Text,NextId\n1,A,Hello,2\n2,A,Bye,-1\n";
+            var profile = CreateLocalizationProfile("Id,en\n1,Hello\n", new[] { "en" }, string.Empty);
+
+            var report = DialogueValidator.ValidateCsv(scenario, new[] { 1 }, profile);
+
+            Assert.IsTrue(report.Messages.Any(m =>
+                m.FieldName == DialogueSchema.Localization &&
+                m.Message.Contains("Missing translation for Id 2") &&
+                m.Message.Contains("\"en\"")));
+        }
+
+        [Test]
+        public void ValidateLocalization_ReportsExtraTranslationId()
+        {
+            var scenario = "Id,Speaker,Text,NextId\n1,A,Hello,-1\n";
+            var profile = CreateLocalizationProfile("Id,en\n1,Hello\n99,Extra\n", new[] { "en" }, string.Empty);
+
+            var report = DialogueValidator.ValidateCsv(scenario, new[] { 1 }, profile);
+
+            Assert.IsTrue(report.Messages.Any(m =>
+                m.FieldName == DialogueSchema.Localization &&
+                m.Message.Contains("Translation Id 99")));
+        }
+
+        [Test]
+        public void ValidateLocalization_ReportsVariableMismatch()
+        {
+            var scenario = "Id,Speaker,Text,NextId\n1,A,Hello {name},-1\n";
+            var profile = CreateLocalizationProfile("Id,en\n1,Hello {player}\n", new[] { "en" }, string.Empty);
+
+            var report = DialogueValidator.ValidateCsv(scenario, new[] { 1 }, profile);
+
+            Assert.IsTrue(report.Messages.Any(m =>
+                m.FieldName == DialogueSchema.Localization &&
+                m.Message.Contains("\"name\"") &&
+                m.Message.Contains("missing")));
+            Assert.IsTrue(report.Messages.Any(m =>
+                m.FieldName == DialogueSchema.Localization &&
+                m.Message.Contains("\"player\"") &&
+                m.Message.Contains("not present")));
+        }
+
+        private static DialogueValidationProfile CreateLocalizationProfile(string translationCsv, IEnumerable<string> languages, string fallbackLanguage)
+        {
+            var profile = ScriptableObject.CreateInstance<DialogueValidationProfile>();
+            profile.SetTranslationCsvFiles(new[] { new TextAsset(translationCsv) });
+            profile.SetLocalizationLanguageKeys(languages);
+            profile.FallbackLanguageKey = fallbackLanguage;
+            profile.LocalizationSeverity = DialogueValidationSeverity.Error;
+            return profile;
         }
     }
 }

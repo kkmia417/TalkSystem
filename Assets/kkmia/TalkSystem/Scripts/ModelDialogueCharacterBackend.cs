@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System;
 using UnityEngine;
 
 namespace kkmia.TalkSystem
@@ -16,7 +17,7 @@ namespace kkmia.TalkSystem
     /// キーでモデルを引き、スロットの Transform 下へ配置して表示/退場/表情/アニメを反映する。
     /// SDK 非依存。<see cref="DialogueStageView"/> の characterBackend に割り当てて使う。
     /// </summary>
-    public class ModelDialogueCharacterBackend : MonoBehaviour, IDialogueCharacterBackend
+    public class ModelDialogueCharacterBackend : MonoBehaviour, IDialogueCharacterBackend, IDialoguePresentationIssueSource
     {
         [Tooltip("利用するキャラクターモデル。CharacterKey で参照される。")]
         [SerializeField] private List<DialogueCharacterModel> models = new List<DialogueCharacterModel>();
@@ -29,6 +30,8 @@ namespace kkmia.TalkSystem
 
         // 表示中の slot -> model。退場・全消去で参照する。
         private readonly Dictionary<string, DialogueCharacterModel> _shown = new Dictionary<string, DialogueCharacterModel>();
+
+        public event Action<DialoguePresentationIssueContext> PresentationIssueRaised;
 
         protected virtual void Awake()
         {
@@ -58,6 +61,8 @@ namespace kkmia.TalkSystem
             var model = FindModel(characterKey);
             if (model == null)
             {
+                RaiseIssue(DialoguePresentationIssueKind.CharacterModel, characterKey,
+                    "Character model \"" + characterKey + "\" could not be resolved.");
                 Debug.LogWarning("[ModelDialogueCharacterBackend] モデル \"" + characterKey + "\" が見つかりません。");
                 return;
             }
@@ -152,6 +157,12 @@ namespace kkmia.TalkSystem
         private static string NormalizeSlot(string slot)
         {
             return string.IsNullOrEmpty(slot) ? DialogueStageSlot.Center : slot;
+        }
+
+        private void RaiseIssue(DialoguePresentationIssueKind kind, string key, string message)
+        {
+            if (PresentationIssueRaised != null)
+                PresentationIssueRaised(new DialoguePresentationIssueContext(kind, key, message));
         }
     }
 }

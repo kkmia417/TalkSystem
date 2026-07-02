@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using NUnit.Framework;
+using UnityEditor;
+using UnityEngine;
 
 namespace kkmia.TalkSystem.Tests
 {
@@ -95,6 +97,65 @@ namespace kkmia.TalkSystem.Tests
             director.Apply(BuildRow(string.Empty, string.Empty, string.Empty));
 
             CollectionAssert.AreEqual(new[] { "voice:line_001", "stopVoice" }, player.Calls);
+        }
+
+        [Test]
+        public void Director_RepeatedBgmCue_DoesNotReplayBgmButStillAppliesSeAndVoice()
+        {
+            var player = new RecordingAudioPlayer();
+            var director = new DialogueAudioDirector(player);
+
+            director.Apply(BuildRow("theme", string.Empty, "line_001"));
+            player.Calls.Clear();
+            director.Apply(BuildRow("theme", "door|door", string.Empty));
+
+            CollectionAssert.AreEqual(new[] { "se:door", "se:door", "stopVoice" }, player.Calls);
+        }
+
+        [Test]
+        public void Director_RestoreSnapshot_ReplaysBgmAndVoiceDeterministically()
+        {
+            var player = new RecordingAudioPlayer();
+            var director = new DialogueAudioDirector(player);
+            director.Apply(BuildRow("theme", string.Empty, "line_001"));
+            var snapshot = director.CaptureSnapshot();
+            player.Calls.Clear();
+
+            director.RestoreSnapshot(snapshot);
+
+            CollectionAssert.AreEqual(new[] { "bgm:theme::0", "voice:line_001" }, player.Calls);
+
+            player.Calls.Clear();
+            director.RestoreSnapshot(new DialogueAudioSnapshot());
+
+            CollectionAssert.AreEqual(new[] { "bgm:stop::0", "stopVoice" }, player.Calls);
+        }
+
+        [Test]
+        public void AudioPlayer_MissingBgm_RaisesPresentationIssue()
+        {
+            var go = new GameObject("audio-test");
+            try
+            {
+                var player = go.AddComponent<DialogueAudioPlayer>();
+                var source = go.AddComponent<AudioSource>();
+                var serialized = new SerializedObject(player);
+                serialized.FindProperty("bgmSource").objectReferenceValue = source;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+
+                DialoguePresentationIssueContext issue = null;
+                player.PresentationIssueRaised += context => issue = context;
+
+                player.PlayBgm("missing_bgm", false, string.Empty, 0f);
+
+                Assert.IsNotNull(issue);
+                Assert.AreEqual(DialoguePresentationIssueKind.Bgm, issue.Kind);
+                Assert.AreEqual("missing_bgm", issue.Key);
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
         }
 
         [Test]

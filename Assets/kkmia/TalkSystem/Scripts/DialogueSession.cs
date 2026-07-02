@@ -10,6 +10,7 @@ namespace kkmia.TalkSystem
         private readonly List<int> _choiceHistory = new List<int>();
         private readonly List<DialogueHistoryEntry> _history = new List<DialogueHistoryEntry>();
         private readonly HashSet<int> _skipGuard = new HashSet<int>();
+        private DialogueProgressState _progress = new DialogueProgressState();
 
         public DialogueSession(IDialogueRepository repository)
         {
@@ -24,6 +25,7 @@ namespace kkmia.TalkSystem
         public IReadOnlyList<int> SeenLineIds { get { return _seenLineIds; } }
         public IReadOnlyList<int> ChoiceHistory { get { return _choiceHistory; } }
         public IReadOnlyList<DialogueHistoryEntry> History { get { return _history; } }
+        public DialogueProgressState Progress { get { return _progress; } }
         public string TriggerKey { get; private set; }
         public IDialogueConditionEvaluator ConditionEvaluator { get; set; }
 
@@ -37,6 +39,7 @@ namespace kkmia.TalkSystem
             _seenLineIds.Clear();
             _choiceHistory.Clear();
             _history.Clear();
+            _progress = new DialogueProgressState();
             return LoadLine(id);
         }
 
@@ -60,6 +63,18 @@ namespace kkmia.TalkSystem
         {
             if (displayData == null) return;
             _history.Add(new DialogueHistoryEntry(displayData, _history.Count));
+        }
+
+        public IReadOnlyList<DialogueProgressMarker> MarkProgress(DialogueData data)
+        {
+            var markers = new List<DialogueProgressMarker>();
+            if (data == null)
+                return markers;
+
+            AddProgressMarker(markers, DialogueProgressMarkerType.Chapter, data.ChapterKey);
+            AddProgressMarker(markers, DialogueProgressMarkerType.Route, data.RouteKey);
+            AddProgressMarker(markers, DialogueProgressMarkerType.Ending, data.EndingKey);
+            return markers;
         }
 
         public bool Advance()
@@ -107,7 +122,8 @@ namespace kkmia.TalkSystem
                 State = State,
                 SeenLineIds = new List<int>(_seenLineIds),
                 ChoiceHistory = new List<int>(_choiceHistory),
-                History = new List<DialogueHistoryEntry>(_history)
+                History = new List<DialogueHistoryEntry>(_history),
+                Progress = _progress != null ? _progress.Clone() : new DialogueProgressState()
             };
         }
 
@@ -129,6 +145,7 @@ namespace kkmia.TalkSystem
             if (saveData.History != null)
                 _history.AddRange(saveData.History);
 
+            _progress = saveData.Progress != null ? saveData.Progress.Clone() : new DialogueProgressState();
             TriggerKey = saveData.TriggerKey ?? string.Empty;
 
             if (saveData.CurrentDialogueId >= 0)
@@ -205,6 +222,16 @@ namespace kkmia.TalkSystem
                 return true;
 
             return ConditionEvaluator == null || ConditionEvaluator.Evaluate(choice.ConditionKey, CurrentData);
+        }
+
+        private void AddProgressMarker(List<DialogueProgressMarker> markers, DialogueProgressMarkerType type, string key)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+                return;
+
+            var normalized = key.Trim();
+            var isFirstReach = _progress.Mark(type, normalized);
+            markers.Add(new DialogueProgressMarker(type, normalized, isFirstReach));
         }
     }
 }

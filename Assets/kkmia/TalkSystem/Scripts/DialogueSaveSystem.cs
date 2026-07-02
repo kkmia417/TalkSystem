@@ -13,7 +13,8 @@ namespace kkmia.TalkSystem
     public class DialogueSaveSystem : MonoBehaviour
     {
         /// <summary>オートセーブ専用スロット番号。</summary>
-        public const int AutosaveSlot = 0;
+        public const int AutosaveSlot = DialogueSaveSlotConventions.AutosaveSlot;
+        public const int QuickSaveSlot = DialogueSaveSlotConventions.QuickSaveSlot;
 
         [Tooltip("未設定なら DialogueManager.Instance を使う。")]
         [SerializeField] private DialogueManager manager;
@@ -179,6 +180,16 @@ namespace kkmia.TalkSystem
                 StartCoroutine(CaptureThumbnail(slot));
         }
 
+        public DialogueSaveSlot QuickSave(string title = null)
+        {
+            return Save(QuickSaveSlot, false, title);
+        }
+
+        public void QuickSaveWithThumbnail(string title = null)
+        {
+            SaveWithThumbnail(QuickSaveSlot, false, title);
+        }
+
         /// <summary>指定スロットを読み込み、会話本体と演出系を復元する。</summary>
         public bool Load(int slot)
         {
@@ -205,6 +216,11 @@ namespace kkmia.TalkSystem
             return true;
         }
 
+        public bool QuickLoad()
+        {
+            return Load(QuickSaveSlot);
+        }
+
         public bool Exists(int slot)
         {
             EnsureService();
@@ -228,6 +244,37 @@ namespace kkmia.TalkSystem
         {
             EnsureService();
             return _service != null ? _service.Load(slot) : null;
+        }
+
+        public DialogueSaveSlotViewModel GetSlotViewModel(int slot, bool includeThumbnail = true)
+        {
+            EnsureService();
+            return _service != null
+                ? _service.GetSlotViewModel(slot, includeThumbnail)
+                : DialogueSaveSlotViewModel.Empty(slot, "Dialogue save service is not configured.");
+        }
+
+        public List<DialogueSaveSlotViewModel> GetSlotViewModels(IEnumerable<int> slots, bool includeThumbnail = true)
+        {
+            EnsureService();
+            return _service != null ? _service.GetSlotViewModels(slots, includeThumbnail) : new List<DialogueSaveSlotViewModel>();
+        }
+
+        public List<DialogueSaveSlotViewModel> ListSlotViewModels(bool includeThumbnail = true)
+        {
+            EnsureService();
+            return _service != null ? _service.ListSlotViewModels(includeThumbnail) : new List<DialogueSaveSlotViewModel>();
+        }
+
+        public DialogueSaveSlotViewModel GetLatestContinueCandidate(
+            bool includeAutosaves = true,
+            bool includeQuickSaves = true,
+            bool includeThumbnail = true)
+        {
+            EnsureService();
+            return _service != null
+                ? _service.GetLatestContinueCandidate(includeAutosaves, includeQuickSaves, includeThumbnail)
+                : null;
         }
 
         /// <summary>スロットのサムネイルを Texture2D として取得する。無ければ null。</summary>

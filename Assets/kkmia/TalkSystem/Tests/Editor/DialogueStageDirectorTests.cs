@@ -99,6 +99,40 @@ namespace kkmia.TalkSystem.Tests
         }
 
         [Test]
+        public void StageState_MovingCharacter_EmitsHideBeforeShowAndCarriesExpression()
+        {
+            var state = new DialogueStageState();
+            state.Apply(DialogueStageDirective.ParseList("Alice@left:smile"));
+
+            var ops = state.Apply(DialogueStageDirective.ParseList("Alice@right#slide"));
+
+            Assert.AreEqual(2, ops.Count);
+            Assert.AreEqual(DialogueStageOperationKind.Hide, ops[0].Kind);
+            Assert.AreEqual("left", ops[0].Slot);
+            Assert.AreEqual("Alice", ops[0].CharacterKey);
+            Assert.AreEqual(DialogueStageOperationKind.Show, ops[1].Kind);
+            Assert.AreEqual("right", ops[1].Slot);
+            Assert.AreEqual("smile", ops[1].Expression);
+            Assert.AreEqual("slide", ops[1].Animation);
+        }
+
+        [Test]
+        public void StageState_ReplacingOccupiedSlot_HidesDisplacedCharacter()
+        {
+            var state = new DialogueStageState();
+            state.Apply(DialogueStageDirective.ParseList("Alice@left|Bob@right"));
+
+            var ops = state.Apply(DialogueStageDirective.ParseList("Alice@right"));
+
+            Assert.AreEqual(3, ops.Count);
+            Assert.AreEqual("hide:left:Alice", Describe(ops[0]));
+            Assert.AreEqual("hide:right:Bob", Describe(ops[1]));
+            Assert.AreEqual("show:right:Alice", Describe(ops[2]));
+            Assert.IsFalse(state.Occupancy.ContainsKey("left"));
+            Assert.AreEqual("Alice", state.Occupancy["right"]);
+        }
+
+        [Test]
         public void StageState_ReShow_KeepsExistingSlotWhenOmitted()
         {
             var state = new DialogueStageState();
@@ -147,6 +181,33 @@ namespace kkmia.TalkSystem.Tests
             Assert.IsTrue(view.Calls.Contains("clearAll"));
             Assert.IsTrue(view.Calls.Any(c => c.StartsWith("bg:clear")));
             Assert.AreEqual(0, director.State.Occupancy.Count);
+        }
+
+        [Test]
+        public void Director_RestoreSnapshot_RestoresWithoutTransitionsInStableSlotOrder()
+        {
+            var view = new RecordingStageView();
+            var director = new DialogueStageDirector(view);
+            director.Apply(BuildRow("forest#fade:1", "Bob@right:angry|Alice@left:smile"));
+            var snapshot = director.CaptureSnapshot();
+            view.Calls.Clear();
+
+            director.RestoreSnapshot(snapshot);
+
+            CollectionAssert.AreEqual(new[]
+            {
+                "clearAll",
+                "bg:forest::0",
+                "show:left:Alice:smile:",
+                "show:right:Bob:angry:"
+            }, view.Calls);
+        }
+
+        private static string Describe(DialogueStageOperation op)
+        {
+            return op.Kind == DialogueStageOperationKind.Show
+                ? "show:" + op.Slot + ":" + op.CharacterKey
+                : "hide:" + op.Slot + ":" + op.CharacterKey;
         }
     }
 }

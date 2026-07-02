@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -76,6 +77,7 @@ namespace kkmia.TalkSystem.Editor
             if (profile.CsvFiles.Count == 0)
                 report.Add(DialogueValidationSeverity.Warning, 0, string.Empty, "Dialogue validation profile has no CSV files.");
 
+            var rows = new List<DialogueData>();
             foreach (var csvFile in profile.CsvFiles)
             {
                 if (csvFile == null)
@@ -84,9 +86,11 @@ namespace kkmia.TalkSystem.Editor
                     continue;
                 }
 
-                report.AddRange(DialogueValidator.ValidateCsv(csvFile.text, null, profile).Messages);
+                report.AddRange(DialogueValidator.ValidateCsv(csvFile.text).Messages);
+                rows.AddRange(CsvLoader.ParseText<DialogueData>(csvFile.text).Values);
             }
 
+            report.AddRange(DialogueValidator.ValidateAssets(rows, profile).Messages);
             return report;
         }
 

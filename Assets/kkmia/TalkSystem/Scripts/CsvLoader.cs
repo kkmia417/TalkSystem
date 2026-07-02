@@ -85,7 +85,10 @@ namespace kkmia.TalkSystem
                         Bgm = Get(values, map, DialogueSchema.Bgm, -1),
                         Se = Get(values, map, DialogueSchema.Se, -1),
                         Voice = Get(values, map, DialogueSchema.Voice, -1),
-                        CharactersRaw = Get(values, map, DialogueSchema.Characters, -1)
+                        CharactersRaw = Get(values, map, DialogueSchema.Characters, -1),
+                        ChapterKey = Get(values, map, DialogueSchema.ChapterKey, -1),
+                        RouteKey = Get(values, map, DialogueSchema.RouteKey, -1),
+                        EndingKey = Get(values, map, DialogueSchema.EndingKey, -1)
                     };
 
                     result.Add(data);

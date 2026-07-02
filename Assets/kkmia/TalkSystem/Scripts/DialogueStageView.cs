@@ -21,7 +21,7 @@ namespace kkmia.TalkSystem
     /// アセットキーを <see cref="BackgroundDatabase"/> / <see cref="CharacterExpressionDatabase"/> で解決する。
     /// フェードは単純な alpha 補間で、より高度な演出は後続フェーズで差し替え可能。
     /// </summary>
-    public class DialogueStageView : MonoBehaviour, IDialogueStageView
+    public class DialogueStageView : MonoBehaviour, IDialogueStageView, IDialoguePresentationIssueSource
     {
         [Header("Databases")]
         [SerializeField] private BackgroundDatabase backgroundDatabase;
@@ -44,6 +44,8 @@ namespace kkmia.TalkSystem
         [SerializeField] private float defaultFadeDuration = 0.25f;
 
         private readonly Dictionary<Image, Coroutine> _fades = new Dictionary<Image, Coroutine>();
+
+        public event Action<DialoguePresentationIssueContext> PresentationIssueRaised;
 
         private void Awake()
         {
@@ -77,6 +79,8 @@ namespace kkmia.TalkSystem
             Sprite sprite;
             if (backgroundDatabase == null || !backgroundDatabase.TryGetSprite(backgroundKey, out sprite))
             {
+                RaiseIssue(DialoguePresentationIssueKind.Background, backgroundKey,
+                    "Background key \"" + backgroundKey + "\" could not be resolved.");
                 Debug.LogWarning("[DialogueStageView] 背景キー \"" + backgroundKey + "\" を解決できません。");
                 return;
             }
@@ -96,6 +100,8 @@ namespace kkmia.TalkSystem
             var image = FindSlotImage(slot);
             if (image == null)
             {
+                RaiseIssue(DialoguePresentationIssueKind.StageSlot, slot,
+                    "Stage slot \"" + slot + "\" is not bound to an Image.");
                 Debug.LogWarning("[DialogueStageView] スロット \"" + slot + "\" に対応する Image がありません。");
                 return;
             }
@@ -103,6 +109,8 @@ namespace kkmia.TalkSystem
             Sprite sprite;
             if (characterDatabase == null || !characterDatabase.TryGetSprite(characterKey, expression, out sprite))
             {
+                RaiseIssue(DialoguePresentationIssueKind.Character, characterKey,
+                    "Character key \"" + characterKey + "\" expression \"" + expression + "\" could not be resolved.");
                 Debug.LogWarning("[DialogueStageView] 立ち絵 \"" + characterKey + "\" (" + expression + ") を解決できません。");
                 return;
             }
@@ -158,6 +166,12 @@ namespace kkmia.TalkSystem
             }
 
             return null;
+        }
+
+        private void RaiseIssue(DialoguePresentationIssueKind kind, string key, string message)
+        {
+            if (PresentationIssueRaised != null)
+                PresentationIssueRaised(new DialoguePresentationIssueContext(kind, key, message));
         }
 
         private float ResolveDuration(float duration, string modifier)

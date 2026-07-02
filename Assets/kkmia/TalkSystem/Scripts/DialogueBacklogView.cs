@@ -62,8 +62,7 @@ namespace kkmia.TalkSystem
 
         private void PlayVoice(string voiceKey)
         {
-            if (audioPlayer != null)
-                audioPlayer.PlayVoice(voiceKey);
+            DialogueBacklog.ReplayVoice(voiceKey, audioPlayer);
         }
 
         private void ClearRows()

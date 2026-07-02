@@ -38,6 +38,7 @@ namespace kkmia.TalkSystem
         public event Action<DialogueEventContext> LineCompleted;
         public event Action<DialogueEventContext> DialogueEnded;
         public event Action<DialogueEventContext> DialogueEventTriggered;
+        public event Action<DialogueProgressEventContext> ProgressMarkerReached;
         public event Action<string> ErrorRaised;
 
         public IDialogueRepository Repository
@@ -48,6 +49,21 @@ namespace kkmia.TalkSystem
         public DialogueSessionState State
         {
             get { return _presenter != null ? _presenter.State : DialogueSessionState.Idle; }
+        }
+
+        public DialogueData CurrentData
+        {
+            get { return _presenter != null ? _presenter.CurrentData : null; }
+        }
+
+        public DialogueProgressState Progress
+        {
+            get
+            {
+                return _presenter != null && _presenter.Session.Progress != null
+                    ? _presenter.Session.Progress.Clone()
+                    : new DialogueProgressState();
+            }
         }
 
         public System.Collections.Generic.IReadOnlyList<DialogueHistoryEntry> History
@@ -201,6 +217,7 @@ namespace kkmia.TalkSystem
             _presenter.LineStarted += RaiseLineStarted;
             _presenter.LineCompleted += RaiseLineCompleted;
             _presenter.DialogueEnded += RaiseDialogueEnded;
+            _presenter.ProgressMarkerReached += RaiseProgressMarkerReached;
             _presenter.ErrorRaised += RaiseError;
             ApplyPresenterConfiguration();
         }
@@ -349,6 +366,7 @@ namespace kkmia.TalkSystem
             _presenter.LineStarted -= RaiseLineStarted;
             _presenter.LineCompleted -= RaiseLineCompleted;
             _presenter.DialogueEnded -= RaiseDialogueEnded;
+            _presenter.ProgressMarkerReached -= RaiseProgressMarkerReached;
             _presenter.ErrorRaised -= RaiseError;
             _presenter.Dispose();
             _presenter = null;
@@ -394,6 +412,11 @@ namespace kkmia.TalkSystem
             if (DialogueEnded != null) DialogueEnded(context);
             if (view != null)
                 view.gameObject.SetActive(false);
+        }
+
+        private void RaiseProgressMarkerReached(DialogueProgressEventContext context)
+        {
+            if (ProgressMarkerReached != null) ProgressMarkerReached(context);
         }
 
         private void RaiseError(string message)

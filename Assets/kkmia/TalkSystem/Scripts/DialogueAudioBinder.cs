@@ -10,6 +10,7 @@ namespace kkmia.TalkSystem
     [RequireComponent(typeof(DialogueAudioPlayer))]
     public class DialogueAudioBinder : MonoBehaviour, IDialogueSaveContributor
     {
+        private const string AudioKey = "audio";
         private const string BgmKey = "audio.bgm";
 
         [Tooltip("会話終了時に BGM も停止するか（false ならボイスのみ停止）。")]
@@ -84,24 +85,27 @@ namespace kkmia.TalkSystem
         void IDialogueSaveContributor.Capture(DialogueSaveData data)
         {
             if (data == null || _director == null) return;
+            data.SetExtra(AudioKey, JsonUtility.ToJson(_director.CaptureSnapshot()));
             data.SetExtra(BgmKey, _director.CurrentBgmKey);
         }
 
         void IDialogueSaveContributor.Restore(DialogueSaveData data)
         {
-            if (data == null || _player == null) return;
+            if (data == null || _player == null || _director == null) return;
+
+            string json;
+            if (data.TryGetExtra(AudioKey, out json) && !string.IsNullOrEmpty(json))
+            {
+                var snapshot = JsonUtility.FromJson<DialogueAudioSnapshot>(json);
+                _director.RestoreSnapshot(snapshot);
+                return;
+            }
 
             string key;
             if (!data.TryGetExtra(BgmKey, out key))
                 return;
 
-            if (string.IsNullOrEmpty(key))
-                _player.PlayBgm(string.Empty, true, string.Empty, 0f);
-            else
-                _player.PlayBgm(key, false, string.Empty, 0f);
-
-            if (_director != null)
-                _director.SetCurrentBgmKey(key);
+            _director.RestoreSnapshot(new DialogueAudioSnapshot { bgmKey = key ?? string.Empty });
         }
     }
 }

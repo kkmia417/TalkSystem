@@ -112,6 +112,11 @@ namespace kkmia.TalkSystem
         }
 
         /// <summary>スロットを読み込む（contributor の復元は <see cref="ApplyRestore"/> で別途行う）。</summary>
+        public DialogueSaveSlot QuickSave(DialogueSaveData data, string title, long timestampUnix)
+        {
+            return Save(DialogueSaveSlotConventions.QuickSaveSlot, data, title, false, timestampUnix);
+        }
+
         public DialogueSaveSlot Load(int slot)
         {
             if (!EnsureStorage(DialogueSaveOperation.Load, slot))
@@ -148,6 +153,11 @@ namespace kkmia.TalkSystem
         }
 
         /// <summary>本体復元後に呼び、contributor へサブシステム状態を反映させる。</summary>
+        public DialogueSaveSlot QuickLoad()
+        {
+            return Load(DialogueSaveSlotConventions.QuickSaveSlot);
+        }
+
         public void ApplyRestore(DialogueSaveData data)
         {
             if (data == null) return;
@@ -278,6 +288,62 @@ namespace kkmia.TalkSystem
                         e));
                 }
             }
+        }
+
+        public DialogueSaveSlotViewModel GetSlotViewModel(int slot, bool includeThumbnail = true)
+        {
+            var saveSlot = Load(slot);
+            if (saveSlot == null)
+            {
+                var error = LastResult != null && LastResult.Failed ? LastResult.Message : string.Empty;
+                return DialogueSaveSlotViewModel.Empty(slot, error);
+            }
+
+            var thumbnail = includeThumbnail ? LoadThumbnail(slot) : null;
+            return DialogueSaveSlotViewModel.FromSlot(saveSlot, thumbnail);
+        }
+
+        public List<DialogueSaveSlotViewModel> GetSlotViewModels(IEnumerable<int> slots, bool includeThumbnail = true)
+        {
+            var result = new List<DialogueSaveSlotViewModel>();
+            if (slots == null)
+                return result;
+
+            foreach (var slot in slots)
+                result.Add(GetSlotViewModel(slot, includeThumbnail));
+
+            return result;
+        }
+
+        public List<DialogueSaveSlotViewModel> ListSlotViewModels(bool includeThumbnail = true)
+        {
+            return GetSlotViewModels(ListSlots(), includeThumbnail);
+        }
+
+        public DialogueSaveSlotViewModel GetLatestContinueCandidate(
+            bool includeAutosaves = true,
+            bool includeQuickSaves = true,
+            bool includeThumbnail = true)
+        {
+            DialogueSaveSlotViewModel latest = null;
+            var slots = ListSlotViewModels(includeThumbnail);
+            for (var i = 0; i < slots.Count; i++)
+            {
+                var slot = slots[i];
+                if (slot == null || !slot.CanLoad || slot.IsEmpty)
+                    continue;
+                if (!includeAutosaves && slot.Category == DialogueSaveSlotCategory.Autosave)
+                    continue;
+                if (!includeQuickSaves && slot.Category == DialogueSaveSlotCategory.QuickSave)
+                    continue;
+
+                if (latest == null ||
+                    slot.SavedAtUnix > latest.SavedAtUnix ||
+                    (slot.SavedAtUnix == latest.SavedAtUnix && slot.SlotIndex > latest.SlotIndex))
+                    latest = slot;
+            }
+
+            return latest;
         }
 
         private bool PrepareLoadedSlot(DialogueSaveSlot slot, out string error)
@@ -500,6 +566,8 @@ namespace kkmia.TalkSystem
                 data.ChoiceHistory = new List<int>();
             if (data.History == null)
                 data.History = new List<DialogueHistoryEntry>();
+            if (data.Progress == null)
+                data.Progress = new DialogueProgressState();
             if (data.ExtraState == null)
                 data.ExtraState = new List<DialogueSaveValue>();
         }

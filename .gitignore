@@ -8,11 +8,14 @@
 [Bb]uilds/
 [Uu]serSettings/
 Assets/AssetStoreTools*
+Assets/_Recovery/
+Assets/_Recovery.meta
 
 # ============================
 # TextMeshPro (TMP) / Settings
 # ============================
 Assets/TextMesh Pro/
+Assets/TextMesh Pro.meta
 Assets/Settings/
 
 
@@ -20,6 +23,7 @@ Assets/Settings/
 # Rider / JetBrains IDEs
 # ============================
 .idea/
+.serena/
 *.sln.iml
 
 # ============================
@@ -29,6 +33,7 @@ Assets/Settings/
 *.csproj
 *.unityproj
 *.sln
+*.slnx
 *.user
 *.suo
 
@@ -70,6 +75,7 @@ Thumbs.db
 # ============================
 Packages/com.unity.render-pipelines.*
 Packages/com.unity.addressables
+Packages/package.json
 
 # ============================
 # Builds or Archives (optional)

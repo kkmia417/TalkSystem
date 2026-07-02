@@ -1,4 +1,6 @@
 using System.Linq;
+using System.IO;
+using kkmia.TalkSystem.Editor;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -121,6 +123,91 @@ namespace kkmia.TalkSystem.Tests
             Assert.IsTrue(report.Messages.Any(m => m.FieldName == DialogueSchema.ConditionKey && m.Message.Contains("missing_condition")));
             Assert.IsTrue(report.Messages.Any(m => m.FieldName == DialogueSchema.Choices && m.Message.Contains("missing_choice_condition")));
             Assert.IsTrue(report.Messages.Any(m => m.FieldName == "Variable" && m.Message.Contains("missingName")));
+        }
+
+        [Test]
+        public void ValidateCsv_WithProfileReportsUnknownAndDuplicateProgressKeys()
+        {
+            var csv = DialogueCsvCodec.Write(DialogueSchema.FullHeaders, new[]
+            {
+                new[]
+                {
+                    "1", "A", "Progress", "-1", string.Empty, string.Empty, string.Empty,
+                    string.Empty, string.Empty, string.Empty, string.Empty, string.Empty,
+                    string.Empty, string.Empty, string.Empty, "missing_chapter", "missing_route", "missing_ending"
+                }
+            });
+            var profile = ScriptableObject.CreateInstance<DialogueValidationProfile>();
+            profile.ChapterKeyCatalog = CreateCatalog("known_chapter", "known_chapter");
+            profile.RouteKeyCatalog = CreateCatalog("known_route");
+            profile.EndingKeyCatalog = CreateCatalog("known_ending");
+            profile.MissingReferenceSeverity = DialogueValidationSeverity.Error;
+
+            var report = DialogueValidator.ValidateCsv(csv, new[] { 1 }, profile);
+
+            Assert.IsTrue(report.Messages.Any(m => m.FieldName == DialogueSchema.ChapterKey && m.Message.Contains("missing_chapter")));
+            Assert.IsTrue(report.Messages.Any(m => m.FieldName == DialogueSchema.RouteKey && m.Message.Contains("missing_route")));
+            Assert.IsTrue(report.Messages.Any(m => m.FieldName == DialogueSchema.EndingKey && m.Message.Contains("missing_ending")));
+            Assert.IsTrue(report.Messages.Any(m =>
+                m.FieldName == DialogueSchema.ChapterKey &&
+                m.Severity == DialogueValidationSeverity.Error &&
+                m.Message.Contains("duplicated")));
+        }
+
+        [Test]
+        public void ValidateCsv_WithProfileAppliesSeverityToCharacterAssets()
+        {
+            var csv = "Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey,EventKey,Choices,AutoNextSeconds,Background,Bgm,Se,Voice,Characters\n" +
+                      string.Join(",", new[]
+                      {
+                          "1", "MissingSpeaker", "Hello", "-1", "missing_emotion",
+                          string.Empty, string.Empty, string.Empty, string.Empty, string.Empty,
+                          string.Empty, string.Empty, string.Empty, string.Empty, "MissingStage@left:happy"
+                      }) + "\n";
+            var profile = ScriptableObject.CreateInstance<DialogueValidationProfile>();
+            profile.CharacterDatabase = ScriptableObject.CreateInstance<CharacterExpressionDatabase>();
+            profile.MissingReferenceSeverity = DialogueValidationSeverity.Error;
+
+            var report = DialogueValidator.ValidateCsv(csv, new[] { 1 }, profile);
+
+            Assert.IsTrue(report.Messages.Any(m => m.FieldName == DialogueSchema.Speaker && m.Severity == DialogueValidationSeverity.Error));
+            Assert.IsTrue(report.Messages.Any(m => m.FieldName == DialogueSchema.Characters && m.Severity == DialogueValidationSeverity.Error));
+        }
+
+        [Test]
+        public void ValidationReport_HasErrorsOnlyForErrorSeverity()
+        {
+            var report = new DialogueValidationReport();
+            report.Add(DialogueValidationSeverity.Warning, 1, DialogueSchema.Text, "warning");
+
+            Assert.IsFalse(report.HasErrors);
+
+            report.Add(DialogueValidationSeverity.Error, 1, DialogueSchema.Text, "error");
+
+            Assert.IsTrue(report.HasErrors);
+        }
+
+        [Test]
+        public void ValidationRunner_WriteJsonReport_ProducesMachineReadableErrors()
+        {
+            var report = new DialogueValidationReport();
+            report.Add(DialogueValidationSeverity.Error, 2, DialogueSchema.EventKey, "Bad \"event\"");
+            var path = Path.Combine(Path.GetTempPath(), "TalkSystemValidationReport.json");
+
+            try
+            {
+                DialogueValidationRunner.WriteJsonReport(report, path);
+                var json = File.ReadAllText(path);
+
+                Assert.IsTrue(json.Contains("\"hasErrors\":true"));
+                Assert.IsTrue(json.Contains("\"severity\":\"Error\""));
+                Assert.IsTrue(json.Contains("Bad \\\"event\\\""));
+            }
+            finally
+            {
+                if (File.Exists(path))
+                    File.Delete(path);
+            }
         }
 
         private static BackgroundDatabase CreateBackgroundDatabase(string key)

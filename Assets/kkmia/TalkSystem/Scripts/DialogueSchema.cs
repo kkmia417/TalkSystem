@@ -22,6 +22,10 @@ namespace kkmia.TalkSystem
         public const string Se = "Se";
         public const string Voice = "Voice";
         public const string Characters = "Characters";
+        public const string ChapterKey = "ChapterKey";
+        public const string RouteKey = "RouteKey";
+        public const string EndingKey = "EndingKey";
+        public const string Localization = "Localization";
 
         public static readonly string[] DefaultHeaders =
         {
@@ -58,6 +62,13 @@ namespace kkmia.TalkSystem
             Characters
         };
 
+        public static readonly string[] ProgressHeaders =
+        {
+            ChapterKey,
+            RouteKey,
+            EndingKey
+        };
+
         // 対話＋演出をすべて含む書き出し用ヘッダー。エディタ/インポートの round-trip はこれを使う。
         public static readonly string[] FullHeaders =
         {
@@ -75,7 +86,10 @@ namespace kkmia.TalkSystem
             Bgm,
             Se,
             Voice,
-            Characters
+            Characters,
+            ChapterKey,
+            RouteKey,
+            EndingKey
         };
 
         public static Dictionary<string, int> BuildHeaderMap(IReadOnlyList<string> headers)

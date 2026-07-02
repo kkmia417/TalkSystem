@@ -31,6 +31,7 @@ namespace kkmia.TalkSystem
         public List<int> SeenLineIds = new List<int>();
         public List<int> ChoiceHistory = new List<int>();
         public List<DialogueHistoryEntry> History = new List<DialogueHistoryEntry>();
+        public DialogueProgressState Progress = new DialogueProgressState();
 
         /// <summary>
         /// 演出系（ステージ・音声など）が完全復元のために書き込む任意の追加状態。

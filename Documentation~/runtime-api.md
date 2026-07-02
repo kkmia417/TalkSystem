@@ -8,11 +8,81 @@
 - `IDialogueEventDispatcher`
 - `IDialogueView`
 
+## Progress Metadata
+
+CSV columns `ChapterKey`, `RouteKey`, and `EndingKey` are generic markers. `DialoguePresenter.ProgressMarkerReached` and `DialogueManager.ProgressMarkerReached` fire when a shown line contains a marker, and `DialogueManager.Progress` returns the current recorded state.
+
+```csharp
+DialogueManager.Instance.ProgressMarkerReached += context =>
+{
+    if (context.Marker.Type == DialogueProgressMarkerType.Ending &&
+        context.Marker.IsFirstReach)
+    {
+        UnlockEnding(context.Marker.Key);
+    }
+};
+```
+
+Progress state is included in `DialogueSaveData.Progress`. The package records and restores keys only; your game layer owns route selection rules, chapter select UI, gallery unlocks, achievements, and any product-specific meaning attached to those keys.
+
+## Unlock Registry
+
+Use `DialogueUnlockRegistry` for persistent gallery, scene replay, achievement, or bonus-content flags that should live outside an individual save slot. IDs are plain strings. Categories are also strings and are inferred from the prefix before `:`, so `cg:hero_smile` belongs to `cg` and `scene:prologue` belongs to `scene`.
+
+```csharp
+var unlocks = new DialogueUnlockRegistry();
+unlocks.MarkUnlocked("cg:hero_smile");
+unlocks.MarkUnlocked("scene:prologue");
+
+if (unlocks.IsUnlocked("cg:hero_smile"))
+{
+    ShowGalleryThumbnail("cg:hero_smile");
+}
+```
+
+To unlock from dialogue data, wrap your existing event dispatcher:
+
+```csharp
+var unlocks = new DialogueUnlockRegistry();
+var gameEvents = new DelegateDialogueEventDispatcher(HandleGameEvent);
+DialogueManager.Instance.SetEventDispatcher(
+    new DialogueUnlockEventDispatcher(unlocks, gameEvents));
+```
+
+With the default prefix, an `EventKey` of `unlock:cg:hero_smile` marks `cg:hero_smile` as unlocked and still forwards the original event to your game dispatcher. Pass an empty prefix only if every `EventKey` should be treated as an unlock ID.
+
+For global persistence, store unlocks separately from per-slot dialogue progress:
+
+```csharp
+var unlockStorage = new FileDialogueUnlockStorage();
+var unlockSaves = new DialogueUnlockSaveService(unlockStorage);
+
+unlockSaves.LoadInto(unlocks);
+unlocks.MarkUnlocked("scene:after_story");
+unlockSaves.Save(unlocks);
+```
+
+Talk System does not implement a CG gallery or replay menu. Build those screens in your game UI by querying `ListUnlockedIds("cg")`, `ListUnlockedIds("scene")`, or custom categories and mapping those IDs to your own assets.
+
 ## Save Data
 
 Use `DialogueManager.CaptureState()` and `DialogueManager.RestoreState(saveData)` to integrate with your game's save system.
 
 Talk System gives you serializable state and an optional multi-slot persistence layer. Use `DialogueSaveSystem` when you want package-managed JSON slots, thumbnails, contributors, and restore orchestration. Use `DialogueManager.CaptureState()` directly when your game already owns every save file.
+
+Stage and audio binders implement `IDialogueSaveContributor`. Register or assign them to `DialogueSaveSystem` so background, visible characters, current BGM, and current voice restore with the dialogue state. Restore uses zero-duration presentation changes and does not replay one-shot SE.
+
+Default presentation components implement `IDialoguePresentationIssueSource`:
+
+```csharp
+var issueSource = audioPlayer as IDialoguePresentationIssueSource;
+issueSource.PresentationIssueRaised += context =>
+{
+    Debug.LogWarning($"{context.Kind}: {context.Key}");
+};
+```
+
+Use this for UI errors or telemetry when a background, audio, stage slot, sprite, or model key cannot be resolved at runtime.
 
 ### Storage Injection
 

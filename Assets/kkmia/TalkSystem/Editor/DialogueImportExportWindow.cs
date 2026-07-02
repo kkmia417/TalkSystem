@@ -8,8 +8,10 @@ namespace kkmia.TalkSystem.Editor
     public sealed class DialogueImportExportWindow : EditorWindow
     {
         private TextAsset _sourceFile;
+        private TextAsset _existingTranslationFile;
         private string _publishedCsvUrl = string.Empty;
         private string _outputPath = "Assets/dialogue_converted.csv";
+        private string _translationLanguages = "ja,en";
         private Vector2 _scroll;
         private string _preview = string.Empty;
 
@@ -45,6 +47,20 @@ namespace kkmia.TalkSystem.Editor
             GUI.enabled = true;
 
             EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Translation CSV", EditorStyles.boldLabel);
+            _translationLanguages = EditorGUILayout.TextField("Languages", _translationLanguages);
+            _existingTranslationFile = (TextAsset)EditorGUILayout.ObjectField("Existing Translation CSV", _existingTranslationFile, typeof(TextAsset), false);
+            GUI.enabled = _sourceFile != null;
+            if (GUILayout.Button("Scenario CSV -> Translation CSV Preview"))
+            {
+                _preview = DialogueImportExportUtility.ExportTranslationCsv(
+                    _sourceFile.text,
+                    ParseLanguageList(_translationLanguages),
+                    _existingTranslationFile != null ? _existingTranslationFile.text : null);
+            }
+            GUI.enabled = true;
+
+            EditorGUILayout.Space();
             EditorGUILayout.LabelField("Preview", EditorStyles.boldLabel);
             _preview = EditorGUILayout.TextArea(_preview, GUILayout.MinHeight(260));
             EditorGUILayout.EndScrollView();
@@ -67,6 +83,13 @@ namespace kkmia.TalkSystem.Editor
 
                 DialogueImportExportUtility.WriteTextAsset(_outputPath, csv);
             }
+        }
+
+        private static string[] ParseLanguageList(string value)
+        {
+            return (value ?? string.Empty).Split(
+                new[] { ',', ';', '\n', '\r' },
+                System.StringSplitOptions.RemoveEmptyEntries);
         }
     }
 }

@@ -33,6 +33,15 @@ namespace kkmia.TalkSystem
         {
             if (_view == null) return;
 
+            if (backlog != null && backlog.IsOpen)
+            {
+                if (action == DialogueInputAction.Backlog ||
+                    action == DialogueInputAction.Next ||
+                    action == DialogueInputAction.Confirm)
+                    CloseBacklog();
+                return;
+            }
+
             if (action == DialogueInputAction.Next || action == DialogueInputAction.Confirm)
                 _view.RequestNext();
             else if (action == DialogueInputAction.Skip && ResolvePlaybackController() != null)
@@ -42,7 +51,28 @@ namespace kkmia.TalkSystem
             else if (action == DialogueInputAction.Rollback && DialogueManager.Instance != null)
                 DialogueManager.Instance.Rollback();
             else if (action == DialogueInputAction.Backlog && backlog != null)
-                backlog.Toggle();
+                OpenBacklog();
+        }
+
+        private void OpenBacklog()
+        {
+            if (backlog == null)
+                return;
+
+            if (ResolvePlaybackController() != null)
+                playbackController.SetMode(DialoguePlaybackMode.Normal);
+
+            _view.SetAutoAdvanceSuspended(true);
+            backlog.Open();
+        }
+
+        private void CloseBacklog()
+        {
+            if (backlog == null)
+                return;
+
+            backlog.Close();
+            _view.SetAutoAdvanceSuspended(false);
         }
 
         private DialoguePlaybackController ResolvePlaybackController()

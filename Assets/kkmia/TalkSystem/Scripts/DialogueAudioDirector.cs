@@ -19,6 +19,7 @@ namespace kkmia.TalkSystem
 
         /// <summary>現在再生中の BGM キー（停止中は空）。セーブの完全復元で参照する。</summary>
         public string CurrentBgmKey { get; private set; } = string.Empty;
+        public string CurrentVoiceKey { get; private set; } = string.Empty;
 
         /// <summary>復元時など、再生状態を外部から設定した際に現在 BGM キーを更新する。</summary>
         public void SetCurrentBgmKey(string key)
@@ -27,6 +28,34 @@ namespace kkmia.TalkSystem
         }
 
         /// <summary>この行の BGM・SE・ボイスを再生する。</summary>
+        public DialogueAudioSnapshot CaptureSnapshot()
+        {
+            return new DialogueAudioSnapshot
+            {
+                bgmKey = CurrentBgmKey ?? string.Empty,
+                voiceKey = CurrentVoiceKey ?? string.Empty
+            };
+        }
+
+        public void RestoreSnapshot(DialogueAudioSnapshot snapshot)
+        {
+            var bgmKey = snapshot != null ? snapshot.bgmKey ?? string.Empty : string.Empty;
+            var voiceKey = snapshot != null ? snapshot.voiceKey ?? string.Empty : string.Empty;
+
+            if (string.IsNullOrEmpty(bgmKey))
+                _player.PlayBgm(string.Empty, true, string.Empty, 0f);
+            else
+                _player.PlayBgm(bgmKey, false, string.Empty, 0f);
+
+            if (string.IsNullOrEmpty(voiceKey))
+                _player.StopVoice();
+            else
+                _player.PlayVoice(voiceKey);
+
+            CurrentBgmKey = bgmKey;
+            CurrentVoiceKey = voiceKey;
+        }
+
         public void Apply(DialogueData data)
         {
             if (data == null) return;
@@ -40,6 +69,7 @@ namespace kkmia.TalkSystem
         public void StopAll()
         {
             CurrentBgmKey = string.Empty;
+            CurrentVoiceKey = string.Empty;
             _player.StopAll();
         }
 
@@ -47,6 +77,9 @@ namespace kkmia.TalkSystem
         {
             var cue = data.GetBgmCue();
             if (!cue.HasValue) return;
+
+            if (!cue.IsClear && CurrentBgmKey == cue.Key)
+                return;
 
             CurrentBgmKey = cue.IsClear ? string.Empty : cue.Key;
 
@@ -66,9 +99,15 @@ namespace kkmia.TalkSystem
             // ボイスは行に紐づく。Voice 欄が空の行に進んだら前行のボイスを停止する。
             // （BGM と異なり継続をデフォルトにしない。継続が必要なら将来別記法を追加する。）
             if (data.HasVoice)
+            {
+                CurrentVoiceKey = data.Voice;
                 _player.PlayVoice(data.Voice);
+            }
             else
+            {
+                CurrentVoiceKey = string.Empty;
                 _player.StopVoice();
+            }
         }
     }
 }

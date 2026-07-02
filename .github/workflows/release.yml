@@ -13,9 +13,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate package files
+      - name: Validate package and release checklist
         shell: pwsh
-        run: ./Tools/Validate-Package.ps1 -ExpectedVersion "${{ inputs.version }}"
+        run: ./Tools/Invoke-ReleaseChecks.ps1 -ExpectedVersion "${{ inputs.version }}" -SkipUnity -SkipConsumerInstall
 
       - name: Create tag
         run: |

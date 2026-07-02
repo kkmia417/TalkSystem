@@ -78,3 +78,57 @@ jobs:
         with:
           name: unity-editmode-results
           path: test-results
+
+  playmode:
+    name: PlayMode Smoke Tests
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-playmode-${{ runner.os }}-${{ hashFiles('Packages/manifest.json', 'Packages/packages-lock.json', 'package.json') }}
+          restore-keys: |
+            Library-playmode-${{ runner.os }}-
+
+      - name: Check Unity credentials
+        id: unity_credentials
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          if [ -n "$UNITY_LICENSE" ] || { [ -n "$UNITY_SERIAL" ] && [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ]; }; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip Unity PlayMode tests
+        if: steps.unity_credentials.outputs.available != 'true'
+        run: echo "Unity license secrets are not configured; skipping Unity PlayMode tests."
+
+      - name: Run Unity PlayMode Tests
+        if: steps.unity_credentials.outputs.available == 'true'
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: 6000.0.40f1
+          testMode: PlayMode
+          artifactsPath: playmode-test-results
+
+      - name: Upload PlayMode Test Results
+        uses: actions/upload-artifact@v4
+        if: always() && steps.unity_credentials.outputs.available == 'true'
+        with:
+          name: unity-playmode-results
+          path: playmode-test-results

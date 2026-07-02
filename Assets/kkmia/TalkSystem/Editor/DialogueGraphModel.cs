@@ -23,6 +23,9 @@ namespace kkmia.TalkSystem.Editor
         public string se = string.Empty;
         public string voice = string.Empty;
         public string charactersRaw = string.Empty;
+        public string chapterKey = string.Empty;
+        public string routeKey = string.Empty;
+        public string endingKey = string.Empty;
         public Rect rect;
 
         public IReadOnlyList<DialogueChoice> Choices
@@ -118,6 +121,9 @@ namespace kkmia.TalkSystem.Editor
                     se = item.Se,
                     voice = item.Voice,
                     charactersRaw = item.CharactersRaw,
+                    chapterKey = item.ChapterKey,
+                    routeKey = item.RouteKey,
+                    endingKey = item.EndingKey,
                     rect = new Rect(40 + (index % 4) * 300, 40 + (index / 4) * 230, 260, 170)
                 });
                 index++;
@@ -166,7 +172,10 @@ namespace kkmia.TalkSystem.Editor
                     n.bgm ?? string.Empty,
                     n.se ?? string.Empty,
                     n.voice ?? string.Empty,
-                    n.charactersRaw ?? string.Empty
+                    n.charactersRaw ?? string.Empty,
+                    n.chapterKey ?? string.Empty,
+                    n.routeKey ?? string.Empty,
+                    n.endingKey ?? string.Empty
                 });
 
             return DialogueCsvCodec.Write(DialogueSchema.FullHeaders, rows);

@@ -125,7 +125,7 @@ namespace kkmia.TalkSystem
             _textComponent.ForceMeshUpdate();
 
             var totalCharacters = _textComponent.textInfo.characterCount;
-            var currentInterval = interval;
+            var currentSpeed = 1f;
             var commandIndex = 0;
 
             for (var visible = 0; visible <= totalCharacters; visible++)
@@ -136,7 +136,7 @@ namespace kkmia.TalkSystem
                 {
                     var command = _commands[commandIndex++];
                     if (command.Kind == DialogueInlineCommandKind.Speed)
-                        currentInterval = command.Value > 0f ? interval / command.Value : interval;
+                        currentSpeed = command.Value > 0f ? command.Value : 1f;
                     else if (command.Kind == DialogueInlineCommandKind.Wait && command.Value > 0f)
                         yield return new WaitForSeconds(command.Value);
                 }
@@ -144,7 +144,7 @@ namespace kkmia.TalkSystem
                 _textComponent.maxVisibleCharacters = visible;
 
                 if (visible < totalCharacters)
-                    yield return new WaitForSeconds(currentInterval);
+                    yield return new WaitForSeconds(currentSpeed > 0f ? interval / currentSpeed : interval);
             }
 
             _textComponent.maxVisibleCharacters = int.MaxValue;

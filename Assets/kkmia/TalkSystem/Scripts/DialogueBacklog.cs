@@ -44,5 +44,19 @@ namespace kkmia.TalkSystem
 
             return entries;
         }
+
+        public static bool ReplayVoice(DialogueBacklogEntry entry, IDialogueAudioPlayer player)
+        {
+            return entry != null && ReplayVoice(entry.VoiceKey, player);
+        }
+
+        public static bool ReplayVoice(string voiceKey, IDialogueAudioPlayer player)
+        {
+            if (player == null || string.IsNullOrEmpty(voiceKey))
+                return false;
+
+            player.PlayVoice(voiceKey);
+            return true;
+        }
     }
 }

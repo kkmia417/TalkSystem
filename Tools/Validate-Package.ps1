@@ -53,8 +53,11 @@ $required = @(
     "Assets/kkmia/TalkSystem/Scripts/kkmia.TalkSystem.Runtime.asmdef",
     "Assets/kkmia/TalkSystem/Editor/kkmia.TalkSystem.Editor.asmdef",
     "Assets/kkmia/TalkSystem/Tests/Editor/kkmia.TalkSystem.Tests.asmdef",
+    "Assets/kkmia/TalkSystem/Tests/PlayMode/kkmia.TalkSystem.PlayModeTests.asmdef",
     "Tools/Validate-ConsumerInstall.ps1",
+    "Tools/Invoke-ReleaseChecks.ps1",
     "Documentation~/index.md",
+    "Documentation~/release-checklist.md",
     "Samples~/FeatureTour/README.md"
 )
 

@@ -98,6 +98,12 @@ Optional production columns:
 EventKey,Choices,AutoNextSeconds
 ```
 
+Optional progress metadata columns:
+
+```csv
+ChapterKey,RouteKey,EndingKey
+```
+
 Example:
 
 ```csv
@@ -107,6 +113,10 @@ Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey,EventKey,Choices,AutoN
 
 Choices use `Label->NextId` entries separated by `|`. Add `?conditionKey` to hide a choice unless your `IDialogueConditionEvaluator` returns true.
 
+`ChapterKey`, `RouteKey`, and `EndingKey` are generic progress markers. Talk System records reached keys, includes them in `DialogueSaveData.Progress`, and raises `ProgressMarkerReached`; your game owns the meaning of those keys, such as gallery unlocks, route UI, achievements, or chapter select rules.
+
+For persistent gallery/replay flags, use `DialogueUnlockRegistry` with IDs such as `cg:opening`, `scene:prologue`, or any custom string. Unlocks can be marked directly from game code or from `EventKey` values through `DialogueUnlockEventDispatcher`, then saved to a separate global file with `DialogueUnlockSaveService` and `IDialogueUnlockStorage`.
+
 ## Runtime Extension Points
 
 - `IDialogueConditionEvaluator`: evaluates `ConditionKey`
@@ -114,8 +124,11 @@ Choices use `Label->NextId` entries separated by `|`. Add `?conditionKey` to hid
 - `IDialogueTextResolver`: supports localization keys or external text databases
 - `IDialogueEventDispatcher`: reacts to `EventKey`
 - `IDialogueView`: swaps UGUI for custom UI Toolkit, Timeline, or in-game terminal views
+- `DialogueUnlockRegistry` / `IDialogueUnlockStorage`: generic CG gallery, replay, and bonus-content unlock state without a built-in gallery UI
 - `DialogueSaveSystem` / `IDialogueSaveStorage`: multi-slot saves, thumbnails, storage injection, failure reporting, and schema migration hooks
 - `DialogueSaveData`: integrates current dialogue state with your own save system
+
+Localization uses translation CSV files shaped as `Id,Speaker,Source,ja,en`. Configure those files and required language keys in a `DialogueValidationProfile` to report missing/extra rows, placeholder mismatches, and fallback-language usage.
 
 ## Editor Tools
 
@@ -136,6 +149,7 @@ Open from the Unity menu:
 - [Editor Tools](Documentation~/editor-tools.md)
 - [Import and Export](Documentation~/import-export.md)
 - [Migration Guide](Documentation~/migration-guide.md)
+- [Release Checklist](Documentation~/release-checklist.md)
 - [Troubleshooting](Documentation~/troubleshooting.md)
 
 ## Roadmap

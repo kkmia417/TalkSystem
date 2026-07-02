@@ -119,6 +119,17 @@ namespace kkmia.TalkSystem.Tests
         }
 
         [Test]
+        public void Planner_Skip_WaitsOnChoices()
+        {
+            var planner = new DialoguePlaybackPlanner();
+
+            var plan = planner.Plan(DialoguePlaybackMode.Skip, hasChoices: true, isRead: true, settings: new DialogueSettings());
+
+            Assert.IsFalse(plan.ShouldAdvance);
+            Assert.IsFalse(plan.CancelSkip);
+        }
+
+        [Test]
         public void Planner_Normal_AlwaysWaits()
         {
             var planner = new DialoguePlaybackPlanner();

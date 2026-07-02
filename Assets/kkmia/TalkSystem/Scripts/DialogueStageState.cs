@@ -87,6 +87,7 @@ namespace kkmia.TalkSystem
                 result.Add(new DialogueStageCharacterSnapshot(pair.Key, pair.Value, expression ?? string.Empty));
             }
 
+            result.Sort((a, b) => string.CompareOrdinal(a.slot, b.slot));
             return result;
         }
 
@@ -139,13 +140,13 @@ namespace kkmia.TalkSystem
                     continue;
                 }
 
-                operations.Add(ApplyShow(directive));
+                ApplyShow(directive, operations);
             }
 
             return operations;
         }
 
-        private DialogueStageOperation ApplyShow(DialogueStageDirective directive)
+        private void ApplyShow(DialogueStageDirective directive, List<DialogueStageOperation> operations)
         {
             // スロット解決順: 明示指定 > 既に立っている位置 > 既定スロット。
             var slot = directive.Slot;
@@ -164,12 +165,22 @@ namespace kkmia.TalkSystem
             {
                 _occupancy.Remove(previousSlot);
                 _expressions.Remove(previousSlot);
+                operations.Add(DialogueStageOperation.Hide(previousSlot, directive.CharacterKey, directive.Animation));
+            }
+
+            string displacedCharacter;
+            if (_occupancy.TryGetValue(slot, out displacedCharacter) && displacedCharacter != directive.CharacterKey)
+            {
+                _occupancy.Remove(slot);
+                _expressions.Remove(slot);
+                operations.Add(DialogueStageOperation.Hide(slot, displacedCharacter, string.Empty));
             }
 
             _occupancy[slot] = directive.CharacterKey;
             // 表情未指定の再表示では直前の表情を維持する。
-            _expressions[slot] = directive.HasExpression ? directive.Expression : (carriedExpression ?? string.Empty);
-            return DialogueStageOperation.Show(slot, directive.CharacterKey, directive.Expression, directive.Animation);
+            var resolvedExpression = directive.HasExpression ? directive.Expression : (carriedExpression ?? string.Empty);
+            _expressions[slot] = resolvedExpression;
+            operations.Add(DialogueStageOperation.Show(slot, directive.CharacterKey, resolvedExpression, directive.Animation));
         }
 
         private string FindSlotOf(string characterKey)

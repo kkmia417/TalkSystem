@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace kkmia.TalkSystem
@@ -25,6 +26,7 @@ namespace kkmia.TalkSystem
         public event Action<DialogueEventContext> LineStarted;
         public event Action<DialogueEventContext> LineCompleted;
         public event Action<DialogueEventContext> DialogueEnded;
+        public event Action<DialogueProgressEventContext> ProgressMarkerReached;
         public event Action<string> ErrorRaised;
 
         public DialogueSessionState State
@@ -220,7 +222,9 @@ namespace kkmia.TalkSystem
             {
                 _session.MarkTyping();
                 _session.RecordDisplayedLine(displayData);
+                var progressMarkers = _session.MarkProgress(data);
                 RaiseLineStarted(data);
+                RaiseProgressMarkers(data, progressMarkers);
 
                 if (data.HasEventKey && _eventDispatcher != null)
                     _eventDispatcher.Dispatch(new DialogueEventContext(data, data.EventKey, _session.State));
@@ -294,6 +298,15 @@ namespace kkmia.TalkSystem
         {
             var context = new DialogueEventContext(null, string.Empty, _session.State);
             if (DialogueEnded != null) DialogueEnded(context);
+        }
+
+        private void RaiseProgressMarkers(DialogueData data, IReadOnlyList<DialogueProgressMarker> markers)
+        {
+            if (markers == null || ProgressMarkerReached == null)
+                return;
+
+            for (var i = 0; i < markers.Count; i++)
+                ProgressMarkerReached(new DialogueProgressEventContext(data, markers[i], _session.Progress));
         }
 
         private void RaiseError(string message)

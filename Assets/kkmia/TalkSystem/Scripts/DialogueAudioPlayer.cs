@@ -9,7 +9,7 @@ namespace kkmia.TalkSystem
     /// BGM（ループ・フェード）、SE（多重ワンショット）、ボイス（行ごと・差し替え）を別チャンネルで扱う。
     /// ボイス用 AudioSource は <see cref="VoiceSource"/> として公開し、リップシンクから参照できる。
     /// </summary>
-    public class DialogueAudioPlayer : MonoBehaviour, IDialogueAudioPlayer
+    public class DialogueAudioPlayer : MonoBehaviour, IDialogueAudioPlayer, IDialoguePresentationIssueSource
     {
         [Header("Database")]
         [SerializeField] private AudioDatabase audioDatabase;
@@ -24,6 +24,8 @@ namespace kkmia.TalkSystem
         [SerializeField] private float defaultFadeDuration = 0.5f;
 
         private Coroutine _bgmFade;
+
+        public event Action<DialoguePresentationIssueContext> PresentationIssueRaised;
 
         /// <summary>リップシンク等から参照するためのボイス AudioSource。</summary>
         public AudioSource VoiceSource
@@ -50,6 +52,8 @@ namespace kkmia.TalkSystem
             AudioClip clip;
             if (audioDatabase == null || !audioDatabase.TryGetBgm(bgmKey, out clip))
             {
+                RaiseIssue(DialoguePresentationIssueKind.Bgm, bgmKey,
+                    "BGM key \"" + bgmKey + "\" could not be resolved.");
                 Debug.LogWarning("[DialogueAudioPlayer] BGM キー \"" + bgmKey + "\" を解決できません。");
                 return;
             }
@@ -85,6 +89,8 @@ namespace kkmia.TalkSystem
             AudioClip clip;
             if (audioDatabase == null || !audioDatabase.TryGetSe(seKey, out clip))
             {
+                RaiseIssue(DialoguePresentationIssueKind.Se, seKey,
+                    "SE key \"" + seKey + "\" could not be resolved.");
                 Debug.LogWarning("[DialogueAudioPlayer] SE キー \"" + seKey + "\" を解決できません。");
                 return;
             }
@@ -103,6 +109,8 @@ namespace kkmia.TalkSystem
             AudioClip clip;
             if (audioDatabase == null || !audioDatabase.TryGetVoice(voiceKey, out clip))
             {
+                RaiseIssue(DialoguePresentationIssueKind.Voice, voiceKey,
+                    "Voice key \"" + voiceKey + "\" could not be resolved.");
                 Debug.LogWarning("[DialogueAudioPlayer] ボイスキー \"" + voiceKey + "\" を解決できません。");
                 return;
             }
@@ -124,6 +132,12 @@ namespace kkmia.TalkSystem
             StopVoice();
             if (bgmSource != null)
                 FadeBgm(0f, defaultFadeDuration, stopAtEnd: true);
+        }
+
+        private void RaiseIssue(DialoguePresentationIssueKind kind, string key, string message)
+        {
+            if (PresentationIssueRaised != null)
+                PresentationIssueRaised(new DialoguePresentationIssueContext(kind, key, message));
         }
 
         private float ResolveDuration(float duration, string transition)
