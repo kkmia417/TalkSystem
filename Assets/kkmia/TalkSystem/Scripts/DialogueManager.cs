@@ -16,6 +16,13 @@ namespace kkmia.TalkSystem
         /// </summary>
         public static event Action<DialogueManager> InstanceChanged;
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            Instance = null;
+            InstanceChanged = null;
+        }
+
         [Header("CSVファイル")]
         [Tooltip("会話データを含むCSVファイル (TextAsset)")]
         [SerializeField] private TextAsset csvFile;

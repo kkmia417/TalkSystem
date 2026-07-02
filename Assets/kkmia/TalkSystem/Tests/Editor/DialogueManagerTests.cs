@@ -89,6 +89,30 @@ namespace kkmia.TalkSystem.Tests
             }
         }
 
+        [Test]
+        public void Manager_ResetStatics_ClearsInstanceAndSubscribers()
+        {
+            var view = CreateView("DialogueView");
+            var manager = CreateManager(view);
+            var invoked = false;
+            DialogueManager.InstanceChanged += _ => invoked = true;
+
+            try
+            {
+                InvokeStatic("ResetStatics");
+
+                Assert.IsNull(DialogueManager.Instance);
+                Assert.IsNull(GetStaticEventDelegate("InstanceChanged"));
+                Assert.IsFalse(invoked);
+            }
+            finally
+            {
+                Destroy(manager);
+                Destroy(view);
+                InvokeStatic("ResetStatics");
+            }
+        }
+
         private static DialogueManager CreateManager(DialogueView view)
         {
             return CreateManager(view, Csv);
@@ -110,6 +134,20 @@ namespace kkmia.TalkSystem.Tests
             var method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.IsNotNull(method);
             method.Invoke(target, null);
+        }
+
+        private static void InvokeStatic(string methodName)
+        {
+            var method = typeof(DialogueManager).GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.IsNotNull(method);
+            method.Invoke(null, null);
+        }
+
+        private static object GetStaticEventDelegate(string eventName)
+        {
+            var field = typeof(DialogueManager).GetField(eventName, BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.IsNotNull(field);
+            return field.GetValue(null);
         }
 
         private static DialogueView CreateView(string name)
