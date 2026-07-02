@@ -149,6 +149,7 @@ Open from the Unity menu:
 - [Editor Tools](Documentation~/editor-tools.md)
 - [Import and Export](Documentation~/import-export.md)
 - [Migration Guide](Documentation~/migration-guide.md)
+- [Packaging](Documentation~/packaging.md)
 - [Performance and Limits](Documentation~/performance-limits.md)
 - [Release Checklist](Documentation~/release-checklist.md)
 - [Troubleshooting](Documentation~/troubleshooting.md)

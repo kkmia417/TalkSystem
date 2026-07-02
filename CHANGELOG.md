@@ -31,6 +31,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Graph editor and JSON import/export now round-trip the presentation columns without data loss.
 - Commercial validation profiles: `DialogueValidationProfile` can validate CSV references against character, background, audio, event, condition, variable, chapter, route, ending, and localization catalogs from the editor, command line, and build preprocess gate, with machine-readable JSON reports.
 - Performance and limits documentation, including representative scenario fixture sizes and a 5,000-row validation regression fixture.
+- Packaging guidance documenting the current root UPM layout, target `Runtime`/`Editor`/`Tests` migration plan, and optional dependency boundaries for Input System, Live2D, Spine, and Addressables.
 - `IReadOnlyDialogueSession` for public session inspection without exposing mutation methods.
 
 ### Changed

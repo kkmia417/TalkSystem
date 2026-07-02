@@ -11,5 +11,6 @@ Talk System is a CSV-driven dialogue package for Unity. It focuses on production
 - [Editor Tools](editor-tools.md)
 - [Import and Export](import-export.md)
 - [Migration Guide](migration-guide.md)
+- [Packaging](packaging.md)
 - [Performance and Limits](performance-limits.md)
 - [Troubleshooting](troubleshooting.md)
