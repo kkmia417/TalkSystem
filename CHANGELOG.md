@@ -30,6 +30,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Validation for malformed stage directives, malformed/negative transition durations, and stage-directive characters/expressions against the character expression database.
 - Graph editor and JSON import/export now round-trip the presentation columns without data loss.
 - Commercial validation profiles: `DialogueValidationProfile` can validate CSV references against character, background, audio, event, condition, variable, chapter, route, ending, and localization catalogs from the editor, command line, and build preprocess gate, with machine-readable JSON reports.
+- Performance and limits documentation, including representative scenario fixture sizes and a 5,000-row validation regression fixture.
 - `IReadOnlyDialogueSession` for public session inspection without exposing mutation methods.
 
 ### Changed

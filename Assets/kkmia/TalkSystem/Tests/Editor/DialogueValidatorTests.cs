@@ -210,6 +210,38 @@ namespace kkmia.TalkSystem.Tests
             }
         }
 
+        [Test]
+        public void ValidateCsv_LargeLinearFixture_CompletesWithStableCounts()
+        {
+            const int rowCount = 5000;
+            var rows = new System.Collections.Generic.List<System.Collections.Generic.IReadOnlyList<string>>(rowCount);
+            for (var i = 1; i <= rowCount; i++)
+            {
+                rows.Add(new[]
+                {
+                    i.ToString(),
+                    "Narrator",
+                    "Line " + i,
+                    i == rowCount ? "-1" : (i + 1).ToString()
+                });
+            }
+
+            var csv = DialogueCsvCodec.Write(
+                new[] { DialogueSchema.Id, DialogueSchema.Speaker, DialogueSchema.Text, DialogueSchema.NextId },
+                rows);
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+            var report = DialogueValidator.ValidateCsv(csv, new[] { 1 });
+
+            stopwatch.Stop();
+            TestContext.WriteLine("Validated {0} rows in {1} ms with {2} messages.",
+                rowCount,
+                stopwatch.ElapsedMilliseconds,
+                report.Messages.Count);
+            Assert.IsFalse(report.HasErrors);
+            Assert.IsFalse(report.Messages.Any(m => m.Message.Contains("unreachable")));
+        }
+
         private static BackgroundDatabase CreateBackgroundDatabase(string key)
         {
             var database = ScriptableObject.CreateInstance<BackgroundDatabase>();
