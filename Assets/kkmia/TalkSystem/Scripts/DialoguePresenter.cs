@@ -44,7 +44,7 @@ namespace kkmia.TalkSystem
             get { return _session.CurrentChoices != null ? _session.CurrentChoices.Count : 0; }
         }
 
-        public DialogueSession Session
+        public IReadOnlyDialogueSession Session
         {
             get { return _session; }
         }

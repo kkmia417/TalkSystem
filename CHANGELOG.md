@@ -29,6 +29,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `DialogueStageDirective` parsing for the `Characters` column (`Character@slot:expression#animation`, character exit with `-`, full-stage clear with `*`).
 - Validation for malformed stage directives, malformed/negative transition durations, and stage-directive characters/expressions against the character expression database.
 - Graph editor and JSON import/export now round-trip the presentation columns without data loss.
+- `IReadOnlyDialogueSession` for public session inspection without exposing mutation methods.
+
+### Changed
+
+- `DialoguePresenter.Session` now exposes `IReadOnlyDialogueSession`; advance, choice selection, and ending remain routed through presenter/manager APIs.
 
 ## [0.2.0] - 2026-06-18
 

@@ -20,6 +20,7 @@ namespace kkmia.TalkSystem.Tests
             Assert.AreEqual(2, session.CurrentData.Id);
             Assert.AreEqual(2, session.SeenLineIds.Count);
 
+            session.MarkLineReady();
             Assert.IsFalse(session.Advance());
             Assert.AreEqual(DialogueSessionState.Ended, session.State);
         }
@@ -43,10 +44,12 @@ namespace kkmia.TalkSystem.Tests
             Assert.IsTrue(session.Start(1));
 
             // 1 回目: 2 をスキップして 3 へ。
+            session.MarkLineReady();
             Assert.IsTrue(session.Advance());
             Assert.AreEqual(3, session.CurrentData.Id);
 
             // 2 回目: 再び 2 をスキップして 3 へ戻る。終了してはならない。
+            session.MarkLineReady();
             Assert.IsTrue(session.Advance());
             Assert.AreEqual(3, session.CurrentData.Id);
             Assert.AreNotEqual(DialogueSessionState.Ended, session.State);
@@ -68,6 +71,70 @@ namespace kkmia.TalkSystem.Tests
 
             Assert.IsTrue(session.SelectChoice(1));
             Assert.AreEqual(3, session.CurrentData.Id);
+        }
+
+        [Test]
+        public void Session_Advance_RejectsTypingChoicePendingAndEndedStates()
+        {
+            var csv = "Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey,EventKey,Choices\n" +
+                      "1,A,Hello,2,,,,,\n" +
+                      "2,A,End,-1,,,,,\n" +
+                      "3,A,Choose,-1,,,,,Go->2\n";
+            var repo = new DialogueRepository(CsvLoader.ParseText<DialogueData>(csv).Values);
+            var session = new DialogueSession(repo);
+
+            Assert.IsTrue(session.Start(1));
+            Assert.IsFalse(session.Advance());
+            Assert.AreEqual(1, session.CurrentData.Id);
+            Assert.AreEqual(DialogueSessionState.ShowingLine, session.State);
+
+            session.MarkTyping();
+            Assert.IsFalse(session.Advance());
+            Assert.AreEqual(1, session.CurrentData.Id);
+            Assert.AreEqual(DialogueSessionState.Typing, session.State);
+
+            Assert.IsTrue(session.Start(3));
+            session.MarkLineReady();
+            Assert.AreEqual(DialogueSessionState.ChoicePending, session.State);
+            Assert.IsFalse(session.Advance());
+            Assert.AreEqual(3, session.CurrentData.Id);
+            Assert.AreEqual(DialogueSessionState.ChoicePending, session.State);
+
+            session.End();
+            Assert.IsFalse(session.Advance());
+            Assert.IsNull(session.CurrentData);
+            Assert.AreEqual(DialogueSessionState.Ended, session.State);
+        }
+
+        [Test]
+        public void Session_SelectChoice_RejectsNonChoiceStates()
+        {
+            var repo = new DialogueRepository(CsvLoader.ParseText<DialogueData>(
+                "Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey,EventKey,Choices\n" +
+                "1,A,Choose,-1,,,,,Go->2\n" +
+                "2,A,End,-1,,,,,\n").Values);
+            var session = new DialogueSession(repo);
+
+            Assert.IsTrue(session.Start(1));
+            Assert.IsFalse(session.SelectChoice(0));
+            Assert.AreEqual(1, session.CurrentData.Id);
+            Assert.AreEqual(DialogueSessionState.ShowingLine, session.State);
+
+            session.MarkTyping();
+            Assert.IsFalse(session.SelectChoice(0));
+            Assert.AreEqual(1, session.CurrentData.Id);
+            Assert.AreEqual(DialogueSessionState.Typing, session.State);
+
+            Assert.IsTrue(session.Start(2));
+            session.MarkLineReady();
+            Assert.IsFalse(session.SelectChoice(0));
+            Assert.AreEqual(2, session.CurrentData.Id);
+            Assert.AreEqual(DialogueSessionState.WaitingForInput, session.State);
+
+            session.End();
+            Assert.IsFalse(session.SelectChoice(0));
+            Assert.IsNull(session.CurrentData);
+            Assert.AreEqual(DialogueSessionState.Ended, session.State);
         }
 
         [Test]

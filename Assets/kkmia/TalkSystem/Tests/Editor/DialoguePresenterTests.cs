@@ -85,6 +85,15 @@ namespace kkmia.TalkSystem.Tests
         }
 
         [Test]
+        public void Presenter_Session_ExposesReadOnlyInterface()
+        {
+            var property = typeof(DialoguePresenter).GetProperty("Session");
+
+            Assert.IsNotNull(property);
+            Assert.AreEqual(typeof(IReadOnlyDialogueSession), property.PropertyType);
+        }
+
+        [Test]
         public void Presenter_RestoreState_ResetsRollbackHistoryToRestoredLine()
         {
             var repo = new DialogueRepository(CsvLoader.ParseText<DialogueData>(

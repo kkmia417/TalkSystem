@@ -3,7 +3,20 @@ using System.Linq;
 
 namespace kkmia.TalkSystem
 {
-    public sealed class DialogueSession
+    public interface IReadOnlyDialogueSession
+    {
+        DialogueSessionState State { get; }
+        DialogueData CurrentData { get; }
+        IReadOnlyList<DialogueChoice> CurrentChoices { get; }
+        IReadOnlyList<int> SeenLineIds { get; }
+        IReadOnlyList<DialogueChoiceRecord> ChoiceRecords { get; }
+        IReadOnlyList<int> ChoiceHistory { get; }
+        IReadOnlyList<DialogueHistoryEntry> History { get; }
+        DialogueProgressState Progress { get; }
+        string TriggerKey { get; }
+    }
+
+    public sealed class DialogueSession : IReadOnlyDialogueSession
     {
         private readonly IDialogueRepository _repository;
         private readonly List<int> _seenLineIds = new List<int>();
@@ -82,6 +95,9 @@ namespace kkmia.TalkSystem
 
         public bool Advance()
         {
+            if (State != DialogueSessionState.WaitingForInput && State != DialogueSessionState.ShowingLine)
+                return false;
+
             if (CurrentData == null)
             {
                 End();
@@ -101,6 +117,9 @@ namespace kkmia.TalkSystem
 
         public bool SelectChoice(int index)
         {
+            if (State != DialogueSessionState.ChoicePending)
+                return false;
+
             if (index < 0 || index >= CurrentChoices.Count)
                 return false;
 
