@@ -323,6 +323,60 @@ namespace kkmia.TalkSystem.Tests
         }
 
         [Test]
+        public void FileStorage_CorruptedJson_LoadsPreviousBackupWhenAvailable()
+        {
+            var directory = CreateTempDirectory();
+            try
+            {
+                var storage = new FileDialogueSaveStorage(directory);
+                var service = new DialogueSaveService(storage);
+                service.Save(1, new DialogueSaveData { CurrentDialogueId = 10 }, "first", false, 1);
+                service.Save(1, new DialogueSaveData { CurrentDialogueId = 20 }, "second", false, 2);
+
+                var slotPath = Path.Combine(directory, "slot_1.json");
+                Assert.IsTrue(File.Exists(slotPath + ".bak"));
+                File.WriteAllText(slotPath, "{not valid json");
+
+                var loaded = service.Load(1);
+
+                Assert.IsNotNull(loaded);
+                Assert.AreEqual(10, loaded.Data.CurrentDialogueId);
+                Assert.AreEqual("first", loaded.Title);
+                Assert.IsFalse(service.LastResult.Failed);
+            }
+            finally
+            {
+                DeleteTempDirectory(directory);
+            }
+        }
+
+        [Test]
+        public void FileStorage_Delete_RemovesSlotAndBackup()
+        {
+            var directory = CreateTempDirectory();
+            try
+            {
+                var storage = new FileDialogueSaveStorage(directory);
+                var service = new DialogueSaveService(storage);
+                service.Save(1, new DialogueSaveData { CurrentDialogueId = 10 }, "first", false, 1);
+                service.Save(1, new DialogueSaveData { CurrentDialogueId = 20 }, "second", false, 2);
+
+                var slotPath = Path.Combine(directory, "slot_1.json");
+                Assert.IsTrue(File.Exists(slotPath + ".bak"));
+
+                service.Delete(1);
+
+                Assert.IsFalse(File.Exists(slotPath));
+                Assert.IsFalse(File.Exists(slotPath + ".bak"));
+                Assert.IsNull(service.Load(1));
+            }
+            finally
+            {
+                DeleteTempDirectory(directory);
+            }
+        }
+
+        [Test]
         public void FileStorage_Save_OverwritesExistingSlotAndLoadsLatestData()
         {
             var directory = CreateTempDirectory();

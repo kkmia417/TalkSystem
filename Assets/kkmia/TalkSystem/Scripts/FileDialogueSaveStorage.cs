@@ -27,11 +27,32 @@ namespace kkmia.TalkSystem
             var path = SlotPath(slot);
             if (!File.Exists(path)) return false;
 
+            if (!TryReadSlotFile(path, out data))
+            {
+                var backupPath = BackupPath(path);
+                if (!File.Exists(backupPath) || !TryReadSlotFile(backupPath, out data))
+                    throw new InvalidDataException("Slot JSON did not contain a readable dialogue save slot.");
+            }
+
+            return true;
+        }
+
+        private static bool TryReadSlotFile(string path, out DialogueSaveSlot data)
+        {
+            data = null;
             var json = File.ReadAllText(path, Encoding.UTF8);
             var hasSchemaVersion = json.IndexOf("\"SchemaVersion\"", System.StringComparison.Ordinal) >= 0;
-            data = JsonUtility.FromJson<DialogueSaveSlot>(json);
+            try
+            {
+                data = JsonUtility.FromJson<DialogueSaveSlot>(json);
+            }
+            catch (System.ArgumentException)
+            {
+                return false;
+            }
+
             if (data == null)
-                throw new InvalidDataException("Slot JSON did not contain a dialogue save slot.");
+                return false;
 
             if (!hasSchemaVersion)
             {
@@ -52,8 +73,8 @@ namespace kkmia.TalkSystem
 
         public void Delete(int slot)
         {
-            TryDelete(SlotPath(slot));
-            TryDelete(ThumbnailPath(slot));
+            DeleteWithBackup(SlotPath(slot));
+            DeleteWithBackup(ThumbnailPath(slot));
         }
 
         public bool Exists(int slot)
@@ -140,17 +161,17 @@ namespace kkmia.TalkSystem
         {
             if (!File.Exists(targetPath))
             {
+                TryDelete(BackupPath(targetPath));
                 File.Move(tempPath, targetPath);
                 return;
             }
 
-            var backupPath = targetPath + ".bak";
+            var backupPath = BackupPath(targetPath);
             TryDelete(backupPath);
 
             try
             {
                 File.Replace(tempPath, targetPath, backupPath, true);
-                TryDelete(backupPath);
             }
             catch (System.PlatformNotSupportedException)
             {
@@ -185,6 +206,17 @@ namespace kkmia.TalkSystem
         {
             if (File.Exists(path))
                 File.Delete(path);
+        }
+
+        private static void DeleteWithBackup(string path)
+        {
+            TryDelete(path);
+            TryDelete(BackupPath(path));
+        }
+
+        private static string BackupPath(string path)
+        {
+            return path + ".bak";
         }
     }
 }
