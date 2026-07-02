@@ -407,6 +407,13 @@ namespace kkmia.TalkSystem
                     continue;
                 }
 
+                if (version == 1 && CurrentSchemaVersion >= 2)
+                {
+                    version = 2;
+                    slot.SchemaVersion = version;
+                    continue;
+                }
+
                 error = "No slot migration is registered from schema " + version + " to " + CurrentSchemaVersion + ".";
                 return false;
             }
@@ -445,6 +452,14 @@ namespace kkmia.TalkSystem
                 if (version == 0 && CurrentSchemaVersion >= 1)
                 {
                     version = 1;
+                    data.SchemaVersion = version;
+                    continue;
+                }
+
+                if (version == 1 && CurrentSchemaVersion >= 2)
+                {
+                    MigrateLegacyChoiceHistory(data);
+                    version = 2;
                     data.SchemaVersion = version;
                     continue;
                 }
@@ -562,6 +577,8 @@ namespace kkmia.TalkSystem
                 data.ProductChannel = string.Empty;
             if (data.SeenLineIds == null)
                 data.SeenLineIds = new List<int>();
+            if (data.ChoiceRecords == null)
+                data.ChoiceRecords = new List<DialogueChoiceRecord>();
             if (data.ChoiceHistory == null)
                 data.ChoiceHistory = new List<int>();
             if (data.History == null)
@@ -570,6 +587,28 @@ namespace kkmia.TalkSystem
                 data.Progress = new DialogueProgressState();
             if (data.ExtraState == null)
                 data.ExtraState = new List<DialogueSaveValue>();
+        }
+
+        private static void MigrateLegacyChoiceHistory(DialogueSaveData data)
+        {
+            if (data == null)
+                return;
+
+            if (data.ChoiceRecords == null)
+                data.ChoiceRecords = new List<DialogueChoiceRecord>();
+
+            if (data.ChoiceRecords.Count > 0 || data.ChoiceHistory == null)
+                return;
+
+            for (var i = 0; i < data.ChoiceHistory.Count; i++)
+            {
+                data.ChoiceRecords.Add(new DialogueChoiceRecord(
+                    -1,
+                    data.ChoiceHistory[i],
+                    -1,
+                    string.Empty,
+                    string.Empty));
+            }
         }
 
         private void Report(DialogueSaveOperationResult result)

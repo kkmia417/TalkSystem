@@ -71,6 +71,80 @@ namespace kkmia.TalkSystem.Tests
         }
 
         [Test]
+        public void Session_SelectChoice_RecordsStableRawChoiceAndDestination()
+        {
+            var csv = "Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey,EventKey,Choices\n" +
+                      "1,A,Choose,-1,,,,,Hidden->2 ?hidden|Shown->3\n" +
+                      "2,A,Hidden,-1,,,,,\n" +
+                      "3,A,Shown,-1,,,,,\n";
+            var repo = new DialogueRepository(CsvLoader.ParseText<DialogueData>(csv).Values);
+            var session = new DialogueSession(repo)
+            {
+                ConditionEvaluator = new BlockKeyConditionEvaluator("hidden")
+            };
+
+            session.Start(1);
+            session.MarkLineReady();
+
+            Assert.AreEqual(1, session.CurrentChoices.Count, "条件で非表示の選択肢は UI index に含まれない");
+            Assert.IsTrue(session.SelectChoice(0));
+
+            Assert.AreEqual(3, session.CurrentData.Id);
+            Assert.AreEqual(1, session.ChoiceRecords.Count);
+            Assert.AreEqual(1, session.ChoiceRecords[0].RawChoiceIndex, "フィルタ後 index ではなく CSV 上の raw index を保存する");
+            Assert.AreEqual(3, session.ChoiceRecords[0].NextId);
+            Assert.AreEqual("Shown", session.ChoiceRecords[0].Text);
+        }
+
+        [Test]
+        public void Session_Capture_StoresChoiceRecordsWithoutPersistingFilteredIndexes()
+        {
+            var csv = "Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey,EventKey,Choices\n" +
+                      "1,A,Choose,-1,,,,,Left->2|Right->3\n" +
+                      "2,A,Left,-1,,,,,\n" +
+                      "3,A,Right,-1,,,,,\n";
+            var repo = new DialogueRepository(CsvLoader.ParseText<DialogueData>(csv).Values);
+            var session = new DialogueSession(repo);
+
+            session.Start(1);
+            session.MarkLineReady();
+            Assert.IsTrue(session.SelectChoice(1));
+
+            var save = session.Capture();
+
+            Assert.AreEqual(1, save.ChoiceRecords.Count);
+            Assert.AreEqual(1, save.ChoiceRecords[0].RawChoiceIndex);
+            Assert.AreEqual(3, save.ChoiceRecords[0].NextId);
+            CollectionAssert.IsEmpty(save.ChoiceHistory, "schema 2 saves do not persist legacy filtered indexes");
+        }
+
+        [Test]
+        public void Session_Restore_ChoiceRecordKeepsSelectedDestinationAfterConditionsChange()
+        {
+            var csv = "Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey,EventKey,Choices\n" +
+                      "1,A,Choose,-1,,,,,Gate->2 ?gate|Free->3\n" +
+                      "2,A,Gate,-1,,,,,\n" +
+                      "3,A,Free,-1,,,,,\n";
+            var repo = new DialogueRepository(CsvLoader.ParseText<DialogueData>(csv).Values);
+            var source = new DialogueSession(repo);
+            source.Start(1);
+            source.MarkLineReady();
+            Assert.IsTrue(source.SelectChoice(1));
+
+            var save = source.Capture();
+            var restored = new DialogueSession(repo)
+            {
+                ConditionEvaluator = new BlockKeyConditionEvaluator("gate")
+            };
+
+            Assert.IsTrue(restored.Restore(save));
+            Assert.AreEqual(1, restored.ChoiceRecords.Count);
+            Assert.AreEqual(1, restored.ChoiceRecords[0].RawChoiceIndex);
+            Assert.AreEqual(3, restored.ChoiceRecords[0].NextId);
+            Assert.AreEqual("Free", restored.ChoiceRecords[0].Text);
+        }
+
+        [Test]
         public void Session_Restore_PreservesHistoryAndSavedState()
         {
             var repo = new DialogueRepository(CsvLoader.ParseText<DialogueData>(
@@ -96,6 +170,28 @@ namespace kkmia.TalkSystem.Tests
         }
 
         [Test]
+        public void Session_Restore_LegacyChoiceHistoryAsLossyRecords()
+        {
+            var repo = new DialogueRepository(CsvLoader.ParseText<DialogueData>(
+                "Id,Speaker,Text,NextId\n1,A,Hello,-1\n").Values);
+            var save = new DialogueSaveData
+            {
+                CurrentDialogueId = 1,
+                State = DialogueSessionState.WaitingForInput,
+                ChoiceRecords = null,
+                ChoiceHistory = new System.Collections.Generic.List<int> { 2 }
+            };
+
+            var restored = new DialogueSession(repo);
+
+            Assert.IsTrue(restored.Restore(save));
+            Assert.AreEqual(1, restored.ChoiceRecords.Count);
+            Assert.AreEqual(2, restored.ChoiceRecords[0].RawChoiceIndex);
+            Assert.AreEqual(-1, restored.ChoiceRecords[0].LineId);
+            Assert.AreEqual(-1, restored.ChoiceRecords[0].NextId);
+        }
+
+        [Test]
         public void Session_StartAgain_ResetsHistorySeenAndChoiceHistory()
         {
             var csv = "Id,Speaker,Text,NextId,EmotionKey,TriggerKey,ConditionKey,EventKey,Choices\n" +
@@ -112,7 +208,7 @@ namespace kkmia.TalkSystem.Tests
             Assert.IsTrue(session.SelectChoice(0)); // 1 -> 2
             session.RecordDisplayedLine(session.CurrentData);
 
-            Assert.AreEqual(1, session.ChoiceHistory.Count);
+            Assert.AreEqual(1, session.ChoiceRecords.Count);
             Assert.AreEqual(2, session.History.Count);
             Assert.AreEqual(2, session.SeenLineIds.Count);
 
@@ -120,7 +216,7 @@ namespace kkmia.TalkSystem.Tests
             session.Start(1);
             session.RecordDisplayedLine(session.CurrentData);
 
-            Assert.AreEqual(0, session.ChoiceHistory.Count, "選択履歴は新会話で空から始まる");
+            Assert.AreEqual(0, session.ChoiceRecords.Count, "選択履歴は新会話で空から始まる");
             Assert.AreEqual(1, session.History.Count, "履歴は新会話の表示行だけを含む");
             CollectionAssert.AreEqual(new[] { 1 }, session.SeenLineIds, "既読は新会話の表示済み行だけ");
         }

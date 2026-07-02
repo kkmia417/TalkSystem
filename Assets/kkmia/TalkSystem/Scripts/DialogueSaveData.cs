@@ -19,6 +19,37 @@ namespace kkmia.TalkSystem
         }
     }
 
+    /// <summary>
+    /// 選択履歴を、表示時点のフィルタ済み UI index ではなく安定した事実として保存する。
+    /// schema 1 の <see cref="DialogueSaveData.ChoiceHistory"/> から移行した record は
+    /// line / destination が復元不能なため、RawChoiceIndex 以外を既定値にした lossy record になる。
+    /// </summary>
+    [Serializable]
+    public sealed class DialogueChoiceRecord
+    {
+        public int LineId = -1;
+        public int RawChoiceIndex = -1;
+        public int NextId = -1;
+        public string Text = string.Empty;
+        public string ConditionKey = string.Empty;
+
+        public DialogueChoiceRecord() { }
+
+        public DialogueChoiceRecord(int lineId, int rawChoiceIndex, int nextId, string text, string conditionKey)
+        {
+            LineId = lineId;
+            RawChoiceIndex = rawChoiceIndex;
+            NextId = nextId;
+            Text = text ?? string.Empty;
+            ConditionKey = conditionKey ?? string.Empty;
+        }
+
+        public DialogueChoiceRecord Clone()
+        {
+            return new DialogueChoiceRecord(LineId, RawChoiceIndex, NextId, Text, ConditionKey);
+        }
+    }
+
     [Serializable]
     public sealed class DialogueSaveData
     {
@@ -29,6 +60,7 @@ namespace kkmia.TalkSystem
         public string TriggerKey = string.Empty;
         public DialogueSessionState State = DialogueSessionState.Idle;
         public List<int> SeenLineIds = new List<int>();
+        public List<DialogueChoiceRecord> ChoiceRecords = new List<DialogueChoiceRecord>();
         public List<int> ChoiceHistory = new List<int>();
         public List<DialogueHistoryEntry> History = new List<DialogueHistoryEntry>();
         public DialogueProgressState Progress = new DialogueProgressState();

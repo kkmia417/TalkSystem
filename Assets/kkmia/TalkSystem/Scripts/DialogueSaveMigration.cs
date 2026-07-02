@@ -4,7 +4,7 @@ namespace kkmia.TalkSystem
 {
     public static class DialogueSaveSchema
     {
-        public const int CurrentVersion = 1;
+        public const int CurrentVersion = 2;
     }
 
     public enum DialogueMissingDialoguePolicy

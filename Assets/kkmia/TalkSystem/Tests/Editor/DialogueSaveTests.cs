@@ -479,6 +479,35 @@ namespace kkmia.TalkSystem.Tests
         }
 
         [Test]
+        public void Service_Load_SchemaOneChoiceHistoryMigratesToLossyChoiceRecords()
+        {
+            var storage = new MemoryStorage();
+            storage.Slots[1] = new DialogueSaveSlot
+            {
+                SchemaVersion = 1,
+                SlotIndex = 1,
+                Data = new DialogueSaveData
+                {
+                    SchemaVersion = 1,
+                    CurrentDialogueId = 7,
+                    ChoiceRecords = null,
+                    ChoiceHistory = new List<int> { 2 }
+                }
+            };
+            var service = new DialogueSaveService(storage);
+
+            var loaded = service.Load(1);
+
+            Assert.IsNotNull(loaded);
+            Assert.AreEqual(DialogueSaveSchema.CurrentVersion, loaded.SchemaVersion);
+            Assert.AreEqual(DialogueSaveSchema.CurrentVersion, loaded.Data.SchemaVersion);
+            Assert.AreEqual(1, loaded.Data.ChoiceRecords.Count);
+            Assert.AreEqual(2, loaded.Data.ChoiceRecords[0].RawChoiceIndex);
+            Assert.AreEqual(-1, loaded.Data.ChoiceRecords[0].LineId);
+            Assert.AreEqual(-1, loaded.Data.ChoiceRecords[0].NextId);
+        }
+
+        [Test]
         public void FileStorage_LegacyJsonWithoutSchemaVersion_RunsOlderDataMigration()
         {
             var directory = CreateTempDirectory();
@@ -505,6 +534,61 @@ namespace kkmia.TalkSystem.Tests
                 string bgm;
                 Assert.IsTrue(loaded.Data.TryGetExtra("bgm", out bgm));
                 Assert.AreEqual("theme", bgm);
+            }
+            finally
+            {
+                DeleteTempDirectory(directory);
+            }
+        }
+
+        [Test]
+        public void FileStorage_SchemaOneChoiceHistoryJson_MigratesToChoiceRecords()
+        {
+            var directory = CreateTempDirectory();
+            try
+            {
+                File.WriteAllText(
+                    Path.Combine(directory, "slot_1.json"),
+                    "{\"SchemaVersion\":1,\"SlotIndex\":1,\"Data\":{\"SchemaVersion\":1,\"CurrentDialogueId\":7,\"ChoiceHistory\":[1]}}");
+
+                var service = new DialogueSaveService(new FileDialogueSaveStorage(directory));
+
+                var loaded = service.Load(1);
+
+                Assert.IsNotNull(loaded);
+                Assert.AreEqual(DialogueSaveSchema.CurrentVersion, loaded.SchemaVersion);
+                Assert.AreEqual(DialogueSaveSchema.CurrentVersion, loaded.Data.SchemaVersion);
+                Assert.AreEqual(1, loaded.Data.ChoiceRecords.Count);
+                Assert.AreEqual(1, loaded.Data.ChoiceRecords[0].RawChoiceIndex);
+                Assert.AreEqual(-1, loaded.Data.ChoiceRecords[0].NextId);
+            }
+            finally
+            {
+                DeleteTempDirectory(directory);
+            }
+        }
+
+        [Test]
+        public void FileStorage_SchemaTwoChoiceRecordsJson_LoadsStableChoiceRecord()
+        {
+            var directory = CreateTempDirectory();
+            try
+            {
+                File.WriteAllText(
+                    Path.Combine(directory, "slot_1.json"),
+                    "{\"SchemaVersion\":2,\"SlotIndex\":1,\"Data\":{\"SchemaVersion\":2,\"CurrentDialogueId\":7,\"ChoiceRecords\":[{\"LineId\":10,\"RawChoiceIndex\":1,\"NextId\":20,\"Text\":\"Go\",\"ConditionKey\":\"route_a\"}]}}");
+
+                var service = new DialogueSaveService(new FileDialogueSaveStorage(directory));
+
+                var loaded = service.Load(1);
+
+                Assert.IsNotNull(loaded);
+                Assert.AreEqual(1, loaded.Data.ChoiceRecords.Count);
+                Assert.AreEqual(10, loaded.Data.ChoiceRecords[0].LineId);
+                Assert.AreEqual(1, loaded.Data.ChoiceRecords[0].RawChoiceIndex);
+                Assert.AreEqual(20, loaded.Data.ChoiceRecords[0].NextId);
+                Assert.AreEqual("Go", loaded.Data.ChoiceRecords[0].Text);
+                Assert.AreEqual("route_a", loaded.Data.ChoiceRecords[0].ConditionKey);
             }
             finally
             {

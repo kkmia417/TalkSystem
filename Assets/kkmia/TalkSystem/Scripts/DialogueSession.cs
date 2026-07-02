@@ -7,7 +7,8 @@ namespace kkmia.TalkSystem
     {
         private readonly IDialogueRepository _repository;
         private readonly List<int> _seenLineIds = new List<int>();
-        private readonly List<int> _choiceHistory = new List<int>();
+        private readonly List<DialogueChoiceRecord> _choiceRecords = new List<DialogueChoiceRecord>();
+        private readonly List<int> _legacyChoiceHistory = new List<int>();
         private readonly List<DialogueHistoryEntry> _history = new List<DialogueHistoryEntry>();
         private readonly HashSet<int> _skipGuard = new HashSet<int>();
         private DialogueProgressState _progress = new DialogueProgressState();
@@ -23,7 +24,8 @@ namespace kkmia.TalkSystem
         public DialogueData CurrentData { get; private set; }
         public IReadOnlyList<DialogueChoice> CurrentChoices { get; private set; } = new List<DialogueChoice>();
         public IReadOnlyList<int> SeenLineIds { get { return _seenLineIds; } }
-        public IReadOnlyList<int> ChoiceHistory { get { return _choiceHistory; } }
+        public IReadOnlyList<DialogueChoiceRecord> ChoiceRecords { get { return _choiceRecords; } }
+        public IReadOnlyList<int> ChoiceHistory { get { return _legacyChoiceHistory; } }
         public IReadOnlyList<DialogueHistoryEntry> History { get { return _history; } }
         public DialogueProgressState Progress { get { return _progress; } }
         public string TriggerKey { get; private set; }
@@ -37,7 +39,8 @@ namespace kkmia.TalkSystem
             TriggerKey = triggerKey ?? string.Empty;
             _skipGuard.Clear();
             _seenLineIds.Clear();
-            _choiceHistory.Clear();
+            _choiceRecords.Clear();
+            _legacyChoiceHistory.Clear();
             _history.Clear();
             _progress = new DialogueProgressState();
             return LoadLine(id);
@@ -102,8 +105,17 @@ namespace kkmia.TalkSystem
                 return false;
 
             _skipGuard.Clear();
-            _choiceHistory.Add(index);
-            return LoadLine(CurrentChoices[index].NextId);
+            var choice = CurrentChoices[index];
+            var rawChoiceIndex = ResolveRawChoiceIndex(index);
+            var record = new DialogueChoiceRecord(
+                CurrentData != null ? CurrentData.Id : -1,
+                rawChoiceIndex,
+                choice.NextId,
+                choice.Text,
+                choice.ConditionKey);
+            _choiceRecords.Add(record);
+            _legacyChoiceHistory.Add(rawChoiceIndex);
+            return LoadLine(choice.NextId);
         }
 
         public void End()
@@ -121,7 +133,8 @@ namespace kkmia.TalkSystem
                 TriggerKey = TriggerKey,
                 State = State,
                 SeenLineIds = new List<int>(_seenLineIds),
-                ChoiceHistory = new List<int>(_choiceHistory),
+                ChoiceRecords = CloneChoiceRecords(_choiceRecords),
+                ChoiceHistory = new List<int>(),
                 History = new List<DialogueHistoryEntry>(_history),
                 Progress = _progress != null ? _progress.Clone() : new DialogueProgressState()
             };
@@ -137,9 +150,24 @@ namespace kkmia.TalkSystem
             if (saveData.SeenLineIds != null)
                 _seenLineIds.AddRange(saveData.SeenLineIds);
 
-            _choiceHistory.Clear();
-            if (saveData.ChoiceHistory != null)
-                _choiceHistory.AddRange(saveData.ChoiceHistory);
+            _choiceRecords.Clear();
+            if (saveData.ChoiceRecords != null && saveData.ChoiceRecords.Count > 0)
+            {
+                for (var i = 0; i < saveData.ChoiceRecords.Count; i++)
+                {
+                    if (saveData.ChoiceRecords[i] != null)
+                        _choiceRecords.Add(saveData.ChoiceRecords[i].Clone());
+                }
+            }
+            else if (saveData.ChoiceHistory != null)
+            {
+                for (var i = 0; i < saveData.ChoiceHistory.Count; i++)
+                    _choiceRecords.Add(new DialogueChoiceRecord(-1, saveData.ChoiceHistory[i], -1, string.Empty, string.Empty));
+            }
+
+            _legacyChoiceHistory.Clear();
+            for (var i = 0; i < _choiceRecords.Count; i++)
+                _legacyChoiceHistory.Add(_choiceRecords[i].RawChoiceIndex);
 
             _history.Clear();
             if (saveData.History != null)
@@ -222,6 +250,41 @@ namespace kkmia.TalkSystem
                 return true;
 
             return ConditionEvaluator == null || ConditionEvaluator.Evaluate(choice.ConditionKey, CurrentData);
+        }
+
+        private int ResolveRawChoiceIndex(int filteredIndex)
+        {
+            if (CurrentData == null)
+                return -1;
+
+            var rawChoices = CurrentData.GetChoices();
+            var visibleIndex = -1;
+            for (var i = 0; i < rawChoices.Count; i++)
+            {
+                if (!PassesCondition(rawChoices[i]))
+                    continue;
+
+                visibleIndex++;
+                if (visibleIndex == filteredIndex)
+                    return i;
+            }
+
+            return -1;
+        }
+
+        private static List<DialogueChoiceRecord> CloneChoiceRecords(IEnumerable<DialogueChoiceRecord> records)
+        {
+            var result = new List<DialogueChoiceRecord>();
+            if (records == null)
+                return result;
+
+            foreach (var record in records)
+            {
+                if (record != null)
+                    result.Add(record.Clone());
+            }
+
+            return result;
         }
 
         private void AddProgressMarker(List<DialogueProgressMarker> markers, DialogueProgressMarkerType type, string key)
