@@ -95,7 +95,10 @@ namespace kkmia.TalkSystem
 
         public bool Advance()
         {
-            if (State != DialogueSessionState.WaitingForInput && State != DialogueSessionState.ShowingLine)
+            // 行の表示準備（MarkLineReady）が済むまで送りは受け付けない。ShowingLine は
+            // LoadLine 直後の過渡状態であり、Presenter/PreviewWindow は必ず MarkTyping /
+            // MarkLineReady を経由してから Advance を呼ぶ契約になっている。
+            if (State != DialogueSessionState.WaitingForInput)
                 return false;
 
             if (CurrentData == null)

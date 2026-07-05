@@ -55,6 +55,9 @@ namespace kkmia.TalkSystem
             get { return typewriter != null && typewriter.IsTyping; }
         }
 
+        // 「選択肢なし」を表す共有の空リスト。行送りのたびに空リストを確保しないための定数。
+        private static readonly IReadOnlyList<DialogueChoice> EmptyChoices = new DialogueChoice[0];
+
         private Sprite initialSprite;
         private Coroutine autoNextCoroutine;
         private bool _autoOverrideActive;
@@ -64,7 +67,7 @@ namespace kkmia.TalkSystem
         private DialogueData _currentData;
         private Transform _runtimeChoicesContainer;
         private readonly List<Button> _choiceButtons = new List<Button>();
-        private IReadOnlyList<DialogueChoice> _activeChoices = new List<DialogueChoice>();
+        private IReadOnlyList<DialogueChoice> _activeChoices = EmptyChoices;
 
         private void Awake()
         {
@@ -83,7 +86,7 @@ namespace kkmia.TalkSystem
 
         public void Show(DialogueData data, Action onComplete)
         {
-            Show(data, new List<DialogueChoice>(), onComplete);
+            Show(data, EmptyChoices, onComplete);
         }
 
         public void Show(DialogueData data, IReadOnlyList<DialogueChoice> choices, Action onComplete)
@@ -94,7 +97,7 @@ namespace kkmia.TalkSystem
 
             _currentData = data;
             _lineReady = false;
-            _activeChoices = choices ?? new List<DialogueChoice>();
+            _activeChoices = choices ?? EmptyChoices;
 
             // Show can be called while the view is still inactive, but it must not
             // force an OnDisable/OnEnable cycle because binders re-register on enable.
@@ -411,7 +414,7 @@ namespace kkmia.TalkSystem
             ClearChoiceButtons();
             _currentData = null;
             _lineReady = false;
-            _activeChoices = new List<DialogueChoice>();
+            _activeChoices = EmptyChoices;
 
             if (speakerText != null)
                 speakerText.text = string.Empty;
