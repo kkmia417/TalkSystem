@@ -20,6 +20,7 @@ namespace kkmia.TalkSystem
     {
         private readonly IDialogueRepository _repository;
         private readonly List<int> _seenLineIds = new List<int>();
+        private readonly HashSet<int> _seenLineIdSet = new HashSet<int>();
         private readonly List<DialogueChoiceRecord> _choiceRecords = new List<DialogueChoiceRecord>();
         private readonly List<int> _legacyChoiceHistory = new List<int>();
         private readonly List<DialogueHistoryEntry> _history = new List<DialogueHistoryEntry>();
@@ -52,6 +53,7 @@ namespace kkmia.TalkSystem
             TriggerKey = triggerKey ?? string.Empty;
             _skipGuard.Clear();
             _seenLineIds.Clear();
+            _seenLineIdSet.Clear();
             _choiceRecords.Clear();
             _legacyChoiceHistory.Clear();
             _history.Clear();
@@ -169,8 +171,12 @@ namespace kkmia.TalkSystem
 
             _skipGuard.Clear();
             _seenLineIds.Clear();
+            _seenLineIdSet.Clear();
             if (saveData.SeenLineIds != null)
-                _seenLineIds.AddRange(saveData.SeenLineIds);
+            {
+                for (var i = 0; i < saveData.SeenLineIds.Count; i++)
+                    AddSeenLineId(saveData.SeenLineIds[i]);
+            }
 
             _choiceRecords.Clear();
             if (saveData.ChoiceRecords != null && saveData.ChoiceRecords.Count > 0)
@@ -211,8 +217,7 @@ namespace kkmia.TalkSystem
                 }
 
                 CurrentData = data;
-                if (!_seenLineIds.Contains(data.Id))
-                    _seenLineIds.Add(data.Id);
+                AddSeenLineId(data.Id);
 
                 CurrentChoices = data.GetChoices().Where(PassesCondition).ToList();
                 State = saveData.State;
@@ -227,35 +232,46 @@ namespace kkmia.TalkSystem
 
         private bool LoadLine(int id)
         {
-            var data = _repository.Get(id);
-            if (data == null)
+            while (true)
             {
-                End();
-                return false;
-            }
-
-            if (!PassesCondition(data))
-            {
-                if (!_skipGuard.Add(id))
+                var data = _repository.Get(id);
+                if (data == null)
                 {
                     End();
                     return false;
                 }
 
-                if (data.NextId >= 0)
-                    return LoadLine(data.NextId);
+                if (!PassesCondition(data))
+                {
+                    if (!_skipGuard.Add(id))
+                    {
+                        End();
+                        return false;
+                    }
 
-                End();
-                return false;
+                    if (data.NextId >= 0)
+                    {
+                        id = data.NextId;
+                        continue;
+                    }
+
+                    End();
+                    return false;
+                }
+
+                CurrentData = data;
+                AddSeenLineId(data.Id);
+
+                CurrentChoices = data.GetChoices().Where(PassesCondition).ToList();
+                State = DialogueSessionState.ShowingLine;
+                return true;
             }
+        }
 
-            CurrentData = data;
-            if (!_seenLineIds.Contains(data.Id))
-                _seenLineIds.Add(data.Id);
-
-            CurrentChoices = data.GetChoices().Where(PassesCondition).ToList();
-            State = DialogueSessionState.ShowingLine;
-            return true;
+        private void AddSeenLineId(int id)
+        {
+            if (_seenLineIdSet.Add(id))
+                _seenLineIds.Add(id);
         }
 
         private bool PassesCondition(DialogueData data)
