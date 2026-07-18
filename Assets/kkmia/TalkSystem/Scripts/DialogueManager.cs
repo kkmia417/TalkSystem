@@ -218,8 +218,6 @@ namespace kkmia.TalkSystem
                     view.gameObject.SetActive(false);
                 }
             }
-
-            Debug.Log("[DialogueManager] View がセットされました。");
         }
 
         private void CreatePresenter(DialogueView targetView)
@@ -293,6 +291,12 @@ namespace kkmia.TalkSystem
 
         public void StartDialogue(Func<DialogueData, bool> predicate)
         {
+            if (predicate == null)
+            {
+                Debug.LogError("DialogueManager: predicate が null です。");
+                return;
+            }
+
             if (!EnsureReady()) return;
 
             foreach (var data in _repository.GetAll())
