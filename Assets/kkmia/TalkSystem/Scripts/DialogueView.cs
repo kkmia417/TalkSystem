@@ -66,7 +66,10 @@ namespace kkmia.TalkSystem
         private bool _lineReady;
         private DialogueData _currentData;
         private Transform _runtimeChoicesContainer;
+        // 表示中の選択肢ボタン。行送りのたびに Destroy/Instantiate せず、_choiceButtonPool と
+        // の間で使い回して GC 圧とヒエラルキー再構築を避ける。
         private readonly List<Button> _choiceButtons = new List<Button>();
+        private readonly List<Button> _choiceButtonPool = new List<Button>();
         private IReadOnlyList<DialogueChoice> _activeChoices = EmptyChoices;
 
         private void Awake()
@@ -216,18 +219,38 @@ namespace kkmia.TalkSystem
             for (var i = 0; i < _activeChoices.Count; i++)
             {
                 var index = i;
-                var button = choiceButtonPrefab != null
-                    ? Instantiate(choiceButtonPrefab, targetContainer)
-                    : CreateDefaultChoiceButton(targetContainer);
+                var button = RentChoiceButton(targetContainer);
 
-                var label = button.GetComponentInChildren<TMP_Text>();
+                var label = button.GetComponentInChildren<TMP_Text>(true);
                 if (label != null)
                     label.text = _activeChoices[i].Text;
 
                 button.onClick.AddListener(() => SelectChoice(index));
+                button.transform.SetAsLastSibling();
                 button.gameObject.SetActive(true);
                 _choiceButtons.Add(button);
             }
+        }
+
+        private Button RentChoiceButton(Transform parent)
+        {
+            // シーン遷移などで破棄済みのボタンが混ざり得るため、有効なものが出るまで取り出す。
+            while (_choiceButtonPool.Count > 0)
+            {
+                var last = _choiceButtonPool.Count - 1;
+                var pooled = _choiceButtonPool[last];
+                _choiceButtonPool.RemoveAt(last);
+                if (pooled == null)
+                    continue;
+
+                if (pooled.transform.parent != parent)
+                    pooled.transform.SetParent(parent, false);
+                return pooled;
+            }
+
+            return choiceButtonPrefab != null
+                ? Instantiate(choiceButtonPrefab, parent)
+                : CreateDefaultChoiceButton(parent);
         }
 
         private Transform EnsureChoicesContainer()
@@ -452,8 +475,14 @@ namespace kkmia.TalkSystem
         {
             for (var i = 0; i < _choiceButtons.Count; i++)
             {
-                if (_choiceButtons[i] != null)
-                    Destroy(_choiceButtons[i].gameObject);
+                var button = _choiceButtons[i];
+                if (button == null)
+                    continue;
+
+                // 実行時に追加したリスナーだけを外す（プレハブ側の永続リスナーは保持される）。
+                button.onClick.RemoveAllListeners();
+                button.gameObject.SetActive(false);
+                _choiceButtonPool.Add(button);
             }
 
             _choiceButtons.Clear();
